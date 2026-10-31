@@ -32,6 +32,7 @@ export const WRITE_PARAMS: Record<string, WriteParam[]> = {
 	duplicate_asset: [asset("destination_path")],
 	delete_asset: [asset("asset_path")],
 	import_asset: [directory("destination_path")],
+	import_fbx: [directory("destination_path")],
 	save_asset: [asset("asset_path")],
 	resave_packages: [directory("directory", "/Game")],
 	consolidate_assets: [asset("target_path"), assets("source_paths")],
@@ -72,6 +73,7 @@ export const WRITE_PARAMS: Record<string, WriteParam[]> = {
 	generate_lods: [asset("mesh_path")],
 	generate_collision: [asset("mesh_path")],
 	generate_lightmap_uvs: [asset("mesh_path")],
+	set_lightmap_settings: [asset("mesh_path")],
 };
 
 function pathsOf(param: WriteParam, args: Record<string, unknown>): string[] {

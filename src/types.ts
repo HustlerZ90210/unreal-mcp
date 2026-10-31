@@ -104,6 +104,7 @@ export const ALL_MODULES = [
 	"diagnostics",
 	"ron",
 	"pak",
+	"mesh",
 ] as const;
 
 export type ModuleName = (typeof ALL_MODULES)[number];

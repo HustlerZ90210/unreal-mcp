@@ -11,6 +11,7 @@ import { registerDiagnosticsTools } from "./diagnostics.js";
 import { registerEditorUtilsTools } from "./editor-utils.js";
 import { createWriteGuard, guardWrites } from "./guard.js";
 import { registerMaterialTools } from "./material.js";
+import { registerMeshTools } from "./mesh.js";
 import { registerNiagaraTools } from "./niagara.js";
 import { registerPakTools } from "./pak.js";
 import { registerPluginTools } from "./plugin.js";
@@ -22,7 +23,7 @@ import { registerSourceControlTools } from "./source-control.js";
 import { registerTestingTools } from "./testing.js";
 import { registerWorldPartitionTools } from "./world-partition.js";
 
-// All 19 tool modules (ron is optional and off until listed in enabledModules)
+// All 20 tool modules (ron is optional and off until listed in enabledModules)
 const MODULE_REGISTRARS: Record<
 	string,
 	(server: McpServer, manager: ConnectionManager, config: UnrealMcpConfig) => void
@@ -46,6 +47,7 @@ const MODULE_REGISTRARS: Record<
 	diagnostics: registerDiagnosticsTools,
 	ron: registerRonTools,
 	pak: registerPakTools,
+	mesh: registerMeshTools,
 };
 
 /**

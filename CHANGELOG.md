@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Blender to Unreal
+
+- New `mesh` module: `import_fbx` (static mesh, skeletal mesh or animation, with the import options that
+  matter), `inspect_static_mesh` (size, LODs, collision, lightmap UVs, warnings for the usual import
+  mistakes) and `set_lightmap_settings`. See [docs/blender-pipeline.md](docs/blender-pipeline.md).
+
 ### Pak files
 
 - New `pak` module (read only): `pak_list`, `pak_audit` (is anything in this pak outside the folders

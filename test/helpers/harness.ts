@@ -138,10 +138,17 @@ export function sampleValue(
 ): unknown {
 	const d = def(schema);
 	switch (d.typeName) {
-		case "ZodString":
-			return mode === "hostile" ? HOSTILE_STRING : "SampleName";
+		case "ZodString": {
+			// A string with its own checks (a file extension, a pattern) gets the first sample that passes them.
+			const candidates =
+				mode === "hostile"
+					? [HOSTILE_STRING, `${HOSTILE_STRING}.fbx`]
+					: ["SampleName", "SampleName.fbx", "/Game/SampleName"];
+			return candidates.find((candidate) => schema.safeParse(candidate).success) ?? candidates[0];
+		}
 		case "ZodNumber":
-			return 2;
+			// the first number that passes the schema's own limits (min, max, int, positive ...)
+			return [2, 4, 16, 64, 1].find((candidate) => schema.safeParse(candidate).success) ?? 2;
 		case "ZodBoolean":
 			return overrides.boolean ?? true;
 		case "ZodEnum":
