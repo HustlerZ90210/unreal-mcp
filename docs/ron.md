@@ -107,6 +107,12 @@ finished jobs are forgotten after 20.
 A command that fails (non-zero exit) comes back as an error with its exit code and the end of its
 output.
 
+## Checking the finished pak
+
+`ronfw build` only ever stages cooked files under `/Game/Mods`. To check the pak it made independently, use
+`pak_audit` (module `pak`, on by default) with your mod's folders as `allowed_prefixes`. See
+[pak.md](pak.md).
+
 ## Why not more
 
 The framework already has an editor menu, a tools window and a live link to an open editor. This module

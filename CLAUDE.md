@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-An MCP (Model Context Protocol) server for Unreal Engine — 129 tools across 17 subsystems. TypeScript/Node.js, ESM, communicates with UE via four transport layers.
+An MCP (Model Context Protocol) server for Unreal Engine — 132 tools across 18 subsystems. TypeScript/Node.js, ESM, communicates with UE via four transport layers.
 
 ## Commands
 
@@ -66,7 +66,7 @@ This project was built referencing four existing Unreal MCP implementations:
 | [kvick-games/UnrealMCP](https://github.com/kvick-games/UnrealMCP) | C++ | ~5 | TCP on port 13377 | Early WIP, minimal toolset |
 | [ChiR24/Unreal_mcp](https://github.com/ChiR24/Unreal_mcp) | TypeScript + C++ | 36 | TCP on port 8091 | Action-based dispatch, good security defaults |
 
-Our differentiator: 129 tools, 4 transport layers (most projects have 1), graceful degradation, no mandatory C++ plugin.
+Our differentiator: 132 tools, 4 transport layers (most projects have 1), graceful degradation, no mandatory C++ plugin.
 
 ## Plugin Enhancement Layer
 
@@ -86,6 +86,7 @@ Tools use `manager.executeWithPluginFallback()` for the dual-path pattern: tries
 ## Content protection and the ron module
 
 - `src/tools/guard.ts` wraps the server so tools that change assets are checked against `src/utils/protect.ts` first. A tool that saves, creates, renames, deletes or edits assets must be listed in `WRITE_PARAMS` (a test fails otherwise).
+- `src/tools/pak.ts` and `src/pak/unrealpak.ts` read .pak files through `UnrealPak -List` (read only). The listing is read as a stream; a listing that looks like files but cannot be parsed is an error, never an empty pak.
 - `src/tools/ron.ts` is the optional Ready or Not module (off until enabled). It runs `ronfw` through `src/utils/jobs.ts`, which keeps long commands running as jobs. See `docs/ron.md`.
 
 ## Targeting Unreal Engine 5.3.2

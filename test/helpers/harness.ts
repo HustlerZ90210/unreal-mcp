@@ -10,6 +10,10 @@ import { parseEngineVersion } from "../../src/utils/engine-version.js";
  * recorded instead of executed. This lets tests check the generated Python without an editor.
  */
 
+/** The JSON a tool answers with, read loosely by tests. */
+// biome-ignore lint/suspicious/noExplicitAny: tests read loosely shaped JSON
+export type ToolData = Record<string, any>;
+
 export interface RegisteredTool {
 	name: string;
 	description: string;

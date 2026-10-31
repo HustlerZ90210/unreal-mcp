@@ -7,7 +7,12 @@ import { findFramework, listProfiles } from "../src/ron/framework.js";
 import { registerAllTools } from "../src/tools/index.js";
 import { ALL_MODULES, DEFAULT_MODULES } from "../src/types.js";
 import { type Fixture, createFixture } from "./helpers/fixtures.js";
-import { createFakeManager, createFakeServer, testConfig } from "./helpers/harness.js";
+import {
+	type ToolData,
+	createFakeManager,
+	createFakeServer,
+	testConfig,
+} from "./helpers/harness.js";
 import { PYTHON } from "./helpers/python.js";
 
 describe("modules", () => {
@@ -88,10 +93,6 @@ describe("findFramework", () => {
 		expect(listProfiles(join(fx.root, "nowhere"))).toEqual([]);
 	});
 });
-
-/** The JSON the ron tools answer with. */
-// biome-ignore lint/suspicious/noExplicitAny: test helper reading loosely shaped JSON
-type ToolData = Record<string, any>;
 
 describe.skipIf(!PYTHON)("ron tools", () => {
 	let fx: Fixture;

@@ -1,6 +1,6 @@
 # unreal-mcp
 
-The most comprehensive MCP server for Unreal Engine — **129 tools** across **17 subsystems** (plus an optional Ready or Not module), with **4 transport layers** and **no mandatory C++ plugin**.
+The most comprehensive MCP server for Unreal Engine — **132 tools** across **18 subsystems** (plus an optional Ready or Not module), with **4 transport layers** and **no mandatory C++ plugin**.
 
 > **Beta** — This project is under active development and testing. The tools' Python is checked against the Unreal Engine **5.3** Python API (see [docs/ue-compat.md](docs/ue-compat.md) for what that covers and what it does not) and has not been run end to end in a real 5.3.2 editor by the maintainers of this fork. Run `check_ue_compat` in your editor to see which tools your engine build can run. Bug reports and contributions are welcome.
 
@@ -8,7 +8,7 @@ The most comprehensive MCP server for Unreal Engine — **129 tools** across **1
 
 | | unreal-mcp | [flopperam](https://github.com/flopperam/unreal-engine-mcp) | [chongdashu](https://github.com/chongdashu/unreal-mcp) | [kvick-games](https://github.com/kvick-games/UnrealMCP) | [ChiR24](https://github.com/ChiR24/Unreal_mcp) |
 |---|---|---|---|---|---|
-| Tools | **129** | ~30 | ~20 | ~5 | 36 |
+| Tools | **132** | ~30 | ~20 | ~5 | 36 |
 | Transports | **4** | 1 | 1 | 1 | 1 |
 | Requires C++ plugin | **No** | Yes | Yes | Yes | Yes |
 | Build/package tools | **Yes** | No | No | No | Partial |
@@ -90,6 +90,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/App
 | **remote-control-presets** | 5 | List/get/set preset properties, call preset functions |
 | **plugin** | 3 | List, enable, disable plugins in .uproject |
 | **diagnostics** | 2 | Engine version and connections, `check_ue_compat` self-test for your engine build |
+| **pak** | 3 | List a .pak's files, audit it for stray files, find conflicts between paks (read only) |
 | **ron** (optional) | 10 | Ready or Not: run the framework's `ronfw` tool to check, build and install maps, with long-running jobs. Off until enabled |
 
 ## Architecture
@@ -128,6 +129,7 @@ Three-layer priority: CLI args > environment variables > config file > defaults.
 |----------|---------|-------------|
 | `UNREAL_MCP_PROJECT_PATH` | — | Path to .uproject file or project directory |
 | `UNREAL_MCP_ENGINE_PATH` | auto-detect | UE engine install path |
+| `UNREAL_MCP_UNREAL_PAK` | under the engine path | UnrealPak, if it is somewhere else |
 | `UNREAL_MCP_ENGINE_VERSION` | auto-detect | Engine version, e.g. `5.3.2`. Read from the engine install or the project when not set; the running editor overrides it |
 | `UNREAL_MCP_RC_PORT` | 30010 | Remote Control API port |
 | `UNREAL_MCP_PYTHON_PORT` | 6776 | Python Remote Execution port |
@@ -195,7 +197,7 @@ Install the C++ plugin from `plugin/UnrealMCPBridge/` into your project's `Plugi
 The tools that save, create, rename or delete assets refuse to touch engine content and content that is
 hard-linked to another file, such as the game export a Ready or Not mapping project links in. This is
 on by default and costs nothing in a normal project. The optional `ron` module runs the Community
-Mapping Framework's `ronfw` tool. See [docs/ron.md](docs/ron.md).
+Mapping Framework's `ronfw` tool. See [docs/ron.md](docs/ron.md). The `pak` tools look inside .pak files, for example to check that a mod pak holds only your own files: [docs/pak.md](docs/pak.md).
 
 ## Unreal Engine Versions
 

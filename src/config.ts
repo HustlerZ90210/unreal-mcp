@@ -94,6 +94,9 @@ function loadEnvVars(): Partial<UnrealMcpConfig> {
 			process.env.UNREAL_MCP_PROTECT_LINKED_CONTENT,
 		);
 	}
+	if (process.env.UNREAL_MCP_UNREAL_PAK) {
+		config.unrealPakPath = process.env.UNREAL_MCP_UNREAL_PAK;
+	}
 	if (process.env.UNREAL_MCP_RON_FRAMEWORK) {
 		config.ronFrameworkPath = process.env.UNREAL_MCP_RON_FRAMEWORK;
 	}
@@ -154,6 +157,10 @@ function parseCliArgs(argv: string[]): Partial<UnrealMcpConfig> {
 				break;
 			case "--no-protect-linked-content":
 				config.protectLinkedContent = false;
+				break;
+			case "--unreal-pak":
+				config.unrealPakPath = next;
+				i++;
 				break;
 			case "--ron-framework":
 				config.ronFrameworkPath = next;

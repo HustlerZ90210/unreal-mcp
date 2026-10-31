@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Pak files
+
+- New `pak` module (read only): `pak_list`, `pak_audit` (is anything in this pak outside the folders
+  I expect?) and `pak_conflicts`. See [docs/pak.md](docs/pak.md).
+
 ### Ready or Not
 
 - Content protection: tools that save, create, rename or delete assets refuse to change engine content,

@@ -19,6 +19,8 @@ export interface UnrealMcpConfig {
 	 * content linked into the project. On by default.
 	 */
 	protectLinkedContent?: boolean;
+	/** UnrealPak, if it is not at its usual place under the engine install */
+	unrealPakPath?: string;
 	/** Ready or Not: the Community Mapping Framework folder, which holds Tools/ronfw.py */
 	ronFrameworkPath?: string;
 	/** Python to run ronfw with (default: the engine's bundled Python, then the one on PATH) */
@@ -101,6 +103,7 @@ export const ALL_MODULES = [
 	"plugin",
 	"diagnostics",
 	"ron",
+	"pak",
 ] as const;
 
 export type ModuleName = (typeof ALL_MODULES)[number];
