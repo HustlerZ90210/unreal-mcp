@@ -18,3 +18,9 @@ Thumbs.db
 # UE plugin build artifacts
 plugin/UnrealMCPBridge/Binaries/
 plugin/UnrealMCPBridge/Intermediate/
+
+# Unreal API check cache (downloaded docs, generated stub)
+.cache/
+
+__pycache__/
+*.pyc

@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
+import { consoleScript } from "../utils/python.js";
 import { inlineScript } from "../utils/template.js";
 
 export function registerTestingTools(
@@ -18,11 +19,10 @@ export function registerTestingTools(
 		async ({ filter }) => {
 			manager.requireEditor();
 			const filterLine = filter ? `if '${filter}'.lower() in name.lower()` : "";
-			const script = `import unreal
-import json
+			const script = consoleScript(`import json
 # Use console command to list tests
-unreal.SystemLibrary.execute_console_command(None, 'automation list')
-print(json.dumps({"hint": "Check Output Log for test list. Use run_automation_test with test name to execute."}))`;
+run_console('automation list')
+print(json.dumps({"hint": "Check Output Log for test list. Use run_automation_test with test name to execute."}))`);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };
 		},
@@ -36,10 +36,9 @@ print(json.dumps({"hint": "Check Output Log for test list. Use run_automation_te
 		},
 		async ({ test_name }) => {
 			manager.requireEditor();
-			const script = inlineScript(
-				`import unreal
-import json
-unreal.SystemLibrary.execute_console_command(None, 'automation run {{test_name}}')
+			const script = consoleScript(
+				`import json
+run_console('automation run {{test_name}}')
 print(json.dumps({"started": True, "test": "{{test_name}}", "hint": "Check Output Log for test results"}))`,
 				{ test_name },
 			);
@@ -50,20 +49,18 @@ print(json.dumps({"started": True, "test": "{{test_name}}", "hint": "Check Outpu
 
 	server.tool("run_all_automation_tests", "Run all automation tests.", {}, async () => {
 		manager.requireEditor();
-		const script = `import unreal
-import json
-unreal.SystemLibrary.execute_console_command(None, 'automation runall')
-print(json.dumps({"started": True, "hint": "Check Output Log for test results"}))`;
+		const script = consoleScript(`import json
+run_console('automation runall')
+print(json.dumps({"started": True, "hint": "Check Output Log for test results"}))`);
 		const result = await manager.runPython(script);
 		return { content: [{ type: "text", text: result }] };
 	});
 
 	server.tool("run_map_check", "Run Map Check validation on the current level.", {}, async () => {
 		manager.requireEditor();
-		const script = `import unreal
-import json
-unreal.SystemLibrary.execute_console_command(None, 'map check')
-print(json.dumps({"success": True, "hint": "Check Message Log for Map Check results"}))`;
+		const script = consoleScript(`import json
+run_console('map check')
+print(json.dumps({"success": True, "hint": "Check Message Log for Map Check results"}))`);
 		const result = await manager.runPython(script);
 		return { content: [{ type: "text", text: result }] };
 	});
@@ -100,7 +97,7 @@ print(json.dumps({"validating": count, "directory": "{{directory}}"}))`,
 		},
 		async ({ test_name, platform, configuration }) => {
 			const result = await manager.subprocess.runUAT("RunUnreal", [
-				`-project=${_config.projectPath}`,
+				`-project=${manager.subprocess.uprojectPath}`,
 				`-platform=${platform || _config.platform}`,
 				`-configuration=${configuration}`,
 				"-build=local",
@@ -129,10 +126,9 @@ print(json.dumps({"validating": count, "directory": "{{directory}}"}))`,
 		},
 		async ({ category }) => {
 			manager.requireEditor();
-			const script = inlineScript(
-				`import unreal
-import json
-unreal.SystemLibrary.execute_console_command(None, 'automation run {{category}}')
+			const script = consoleScript(
+				`import json
+run_console('automation run {{category}}')
 print(json.dumps({"started": True, "category": "{{category}}"}))`,
 				{ category },
 			);

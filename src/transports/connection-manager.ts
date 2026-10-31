@@ -1,4 +1,11 @@
 import type { ConnectionStatus, PluginCapabilities, UnrealMcpConfig } from "../types.js";
+import {
+	type EngineVersion,
+	formatVersion,
+	isAtLeast,
+	parseEngineVersion,
+} from "../utils/engine-version.js";
+import { UnsupportedEngineError } from "../utils/errors.js";
 import { PluginBridgeClient } from "./plugin-bridge.js";
 import { PythonExecClient } from "./python-exec.js";
 import { RemoteControlClient } from "./remote-control.js";
@@ -14,6 +21,10 @@ export class ConnectionManager {
 	public plugin!: PluginBridgeClient;
 	public subprocess!: SubprocessRunner;
 
+	private _engineVersion?: EngineVersion;
+	private _versionProbedFromEditor = false;
+	private _lastVersionProbe = 0;
+
 	private _status: ConnectionStatus = {
 		remoteControl: false,
 		pythonExec: false,
@@ -22,6 +33,8 @@ export class ConnectionManager {
 	};
 
 	async initialize(config: UnrealMcpConfig): Promise<void> {
+		this._engineVersion = parseEngineVersion(config.engineVersion);
+
 		// Initialize all transports
 		this.rc = new RemoteControlClient({
 			host: "127.0.0.1",
@@ -90,6 +103,53 @@ export class ConnectionManager {
 				"Unreal Editor is not connected. Make sure the editor is running with " +
 					"Remote Control API and/or Python Editor Script plugins enabled.",
 			);
+		}
+	}
+
+	/**
+	 * The engine version, if known. It comes from the config (set explicitly, read from the
+	 * engine install, or taken from the project's EngineAssociation) until the running editor has
+	 * been asked, and from the editor after that.
+	 */
+	get engineVersion(): EngineVersion | undefined {
+		return this._engineVersion;
+	}
+
+	/**
+	 * Ask the running editor for its version once (retrying at most every 30 s after a failure).
+	 * The editor is authoritative: a project may be opened with a different engine than it names.
+	 */
+	async detectEngineVersion(): Promise<EngineVersion | undefined> {
+		if (
+			!this._versionProbedFromEditor &&
+			this._status.editorRunning &&
+			Date.now() - this._lastVersionProbe > 30_000
+		) {
+			this._lastVersionProbe = Date.now();
+			try {
+				const output = await this.runPython(
+					"import unreal\nprint(unreal.SystemLibrary.get_engine_version())",
+				);
+				const version = parseEngineVersion(output);
+				if (version) {
+					this._engineVersion = version;
+					this._versionProbedFromEditor = true;
+				}
+			} catch {
+				// Keep whatever the config told us
+			}
+		}
+		return this._engineVersion;
+	}
+
+	/**
+	 * Throw a clear error when the editor is older than a tool needs. An unknown version is
+	 * allowed through, because the tool can still report what the editor says.
+	 */
+	async requireEngineAtLeast(min: string, feature: string, alternative?: string): Promise<void> {
+		const version = await this.detectEngineVersion();
+		if (version && isAtLeast(version, min) === false) {
+			throw new UnsupportedEngineError(feature, min, formatVersion(version), alternative);
 		}
 	}
 

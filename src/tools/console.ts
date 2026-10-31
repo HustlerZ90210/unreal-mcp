@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
+import { consoleScript } from "../utils/python.js";
 import { inlineScript } from "../utils/template.js";
 
 export function registerConsoleTools(
@@ -27,10 +28,7 @@ export function registerConsoleTools(
 		async ({ command }) => {
 			manager.requireEditor();
 			// Execute console command via Python
-			const script = inlineScript(
-				`import unreal\nunreal.SystemLibrary.execute_console_command(None, '{{command}}')`,
-				{ command },
-			);
+			const script = consoleScript("run_console('{{command}}')", { command });
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result || `Executed: ${command}` }] };
 		},
@@ -73,14 +71,7 @@ try:
     subsys = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
     vp = subsys.get_level_viewport_camera_info()
     if vp:
-        # Handle both (bool, loc, rot) and (loc, rot) return types across UE versions
-        if len(vp) == 3:
-            success, loc, rot = vp
-        elif len(vp) == 2:
-            loc, rot = vp
-        else:
-            print(json.dumps({"error": "Unexpected return from get_level_viewport_camera_info"}))
-            raise SystemExit()
+        loc, rot = vp
         result = {
             "location": {"x": loc.x, "y": loc.y, "z": loc.z},
             "rotation": {"pitch": rot.pitch, "yaw": rot.yaw, "roll": rot.roll}

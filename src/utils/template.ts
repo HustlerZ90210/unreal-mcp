@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const TEMPLATE_PATTERN = /\{\{(\w+)\}\}/g;
 
@@ -19,6 +20,10 @@ export function renderScript(
 
 /**
  * Substitute {{variable}} placeholders in a template string.
+ *
+ * Strings are escaped for embedding inside a Python string literal, so write `'{{name}}'`.
+ * Booleans become Python `True`/`False` and numbers become numeric literals, so write
+ * `{{count}}` or `{{flag}}` without quotes.
  */
 export function substituteVars(
 	template: string,
@@ -30,6 +35,13 @@ export function substituteVars(
 			if (typeof value === "string") {
 				// Escape for safe embedding in Python string literals
 				return escapePythonString(value);
+			}
+			if (typeof value === "boolean") {
+				// JavaScript's "true"/"false" are not valid Python
+				return value ? "True" : "False";
+			}
+			if (!Number.isFinite(value)) {
+				throw new Error(`Template variable "${varName}" is not a finite number: ${value}`);
 			}
 			return String(value);
 		}
@@ -81,6 +93,6 @@ export function inlineScript(
 function getScriptsDir(): string {
 	// In development (tsx), scripts are in src/scripts/
 	// In production (compiled), scripts are copied to dist/scripts/
-	const srcScripts = join(import.meta.dirname, "scripts");
-	return srcScripts;
+	// import.meta.dirname needs Node 20.11+, so derive the folder from the module URL instead.
+	return join(dirname(fileURLToPath(import.meta.url)), "..", "scripts");
 }

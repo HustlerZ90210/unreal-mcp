@@ -76,3 +76,15 @@ export class PythonExecutionError extends UnrealMcpError {
 		this.name = "PythonExecutionError";
 	}
 }
+
+export class UnsupportedEngineError extends UnrealMcpError {
+	constructor(feature: string, minVersion: string, actualVersion: string, alternative?: string) {
+		const hint = alternative ? ` ${alternative}` : "";
+		super(
+			`${feature} needs Unreal Engine ${minVersion} or newer, but this editor is ${actualVersion}.${hint}`,
+			"ENGINE_VERSION_UNSUPPORTED",
+			{ feature, minVersion, actualVersion },
+		);
+		this.name = "UnsupportedEngineError";
+	}
+}

@@ -1,7 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import type { UnrealMcpConfig } from "./types.js";
 import { ALL_MODULES } from "./types.js";
+import { parseEngineVersion, readBuildVersion } from "./utils/engine-version.js";
+import { resolveProject } from "./utils/project.js";
 
 const DEFAULTS: UnrealMcpConfig = {
 	projectPath: "",
@@ -47,6 +50,9 @@ function loadEnvVars(): Partial<UnrealMcpConfig> {
 	if (process.env.UNREAL_MCP_ENGINE_PATH) {
 		config.enginePath = process.env.UNREAL_MCP_ENGINE_PATH;
 	}
+	if (process.env.UNREAL_MCP_ENGINE_VERSION) {
+		config.engineVersion = process.env.UNREAL_MCP_ENGINE_VERSION;
+	}
 	if (process.env.UNREAL_MCP_RC_PORT) {
 		config.remoteControlPort = Number.parseInt(process.env.UNREAL_MCP_RC_PORT, 10);
 	}
@@ -82,6 +88,10 @@ function parseCliArgs(argv: string[]): Partial<UnrealMcpConfig> {
 				config.enginePath = next;
 				i++;
 				break;
+			case "--engine-version":
+				config.engineVersion = next;
+				i++;
+				break;
 			case "--rc-port":
 				config.remoteControlPort = Number.parseInt(next, 10);
 				i++;
@@ -112,29 +122,37 @@ function parseCliArgs(argv: string[]): Partial<UnrealMcpConfig> {
 	return config;
 }
 
+/** Folders the Epic Games Launcher (and common source-build layouts) install an engine into. */
+function engineInstallCandidates(association: string): string[] {
+	const folder = `UE_${association}`;
+	if (process.platform === "win32") {
+		const roots = [
+			process.env.ProgramFiles,
+			process.env["ProgramFiles(x86)"],
+			"C:\\Program Files",
+			"C:\\Program Files (x86)",
+			"D:\\Program Files",
+			"D:\\",
+			"C:\\",
+		].filter((r): r is string => !!r);
+		return roots.flatMap((root) => [join(root, "Epic Games", folder), join(root, folder)]);
+	}
+	if (process.platform === "darwin") {
+		return [join("/Users/Shared/Epic Games", folder), join(homedir(), folder)];
+	}
+	return [join(homedir(), folder), join(homedir(), "UnrealEngine"), join("/opt", folder)];
+}
+
 function autoDetectEnginePath(projectPath: string): string | undefined {
-	if (!projectPath || !existsSync(projectPath)) return undefined;
-
-	// Try to read .uproject for engine association
-	const uprojectPath = projectPath.endsWith(".uproject")
-		? projectPath
-		: join(projectPath, findUproject(projectPath));
-
-	if (!uprojectPath || !existsSync(uprojectPath)) return undefined;
+	const project = resolveProject(projectPath);
+	if (!project.uprojectPath || !existsSync(project.uprojectPath)) return undefined;
 
 	try {
-		const uproject = JSON.parse(readFileSync(uprojectPath, "utf-8"));
+		const uproject = JSON.parse(readFileSync(project.uprojectPath, "utf-8"));
 		const association = uproject.EngineAssociation;
-		if (!association) return undefined;
+		if (!association || typeof association !== "string") return undefined;
 
-		// Common UE install locations on Windows
-		const candidates = [
-			`C:\\Program Files\\Epic Games\\UE_${association}`,
-			`C:\\Program Files (x86)\\Epic Games\\UE_${association}`,
-			`D:\\Program Files\\Epic Games\\UE_${association}`,
-		];
-
-		for (const candidate of candidates) {
+		for (const candidate of engineInstallCandidates(association)) {
 			if (existsSync(candidate)) return candidate;
 		}
 	} catch {
@@ -144,13 +162,16 @@ function autoDetectEnginePath(projectPath: string): string | undefined {
 	return undefined;
 }
 
-function findUproject(dir: string): string {
+/** The engine version the project asks for, e.g. "5.3" from EngineAssociation (not a GUID). */
+function projectEngineVersion(projectPath: string): string | undefined {
+	const project = resolveProject(projectPath);
+	if (!project.uprojectPath || !existsSync(project.uprojectPath)) return undefined;
 	try {
-		const entries = require("node:fs").readdirSync(dir) as string[];
-		const uproject = entries.find((e: string) => e.endsWith(".uproject"));
-		return uproject || "";
+		const uproject = JSON.parse(readFileSync(project.uprojectPath, "utf-8"));
+		const version = parseEngineVersion(uproject.EngineAssociation);
+		return version ? `${version.major}.${version.minor}` : undefined;
 	} catch {
-		return "";
+		return undefined;
 	}
 }
 
@@ -185,6 +206,14 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): UnrealMcpCon
 
 	if (merged.enginePath) {
 		merged.enginePath = resolve(merged.enginePath);
+	}
+
+	// Engine version: explicit setting > the install's Build.version > the project's association.
+	if (!merged.engineVersion) {
+		const installed = readBuildVersion(merged.enginePath);
+		merged.engineVersion = installed
+			? `${installed.major}.${installed.minor}.${installed.patch}`
+			: projectEngineVersion(merged.projectPath);
 	}
 
 	return merged;

@@ -7,6 +7,7 @@ import { registerAssetTools } from "./asset.js";
 import { registerBlueprintTools } from "./blueprint.js";
 import { registerBuildTools } from "./build.js";
 import { registerConsoleTools } from "./console.js";
+import { registerDiagnosticsTools } from "./diagnostics.js";
 import { registerEditorUtilsTools } from "./editor-utils.js";
 import { registerMaterialTools } from "./material.js";
 import { registerNiagaraTools } from "./niagara.js";
@@ -18,7 +19,7 @@ import { registerSourceControlTools } from "./source-control.js";
 import { registerTestingTools } from "./testing.js";
 import { registerWorldPartitionTools } from "./world-partition.js";
 
-// All 16 tool modules registered
+// All 17 tool modules registered
 const MODULE_REGISTRARS: Record<
 	string,
 	(server: McpServer, manager: ConnectionManager, config: UnrealMcpConfig) => void
@@ -39,6 +40,7 @@ const MODULE_REGISTRARS: Record<
 	"editor-utils": registerEditorUtilsTools,
 	"remote-control-presets": registerRemoteControlPresetsTools,
 	plugin: registerPluginTools,
+	diagnostics: registerDiagnosticsTools,
 };
 
 /**

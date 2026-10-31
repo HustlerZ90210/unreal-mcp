@@ -87,8 +87,12 @@ if bp:
             subsys = unreal.get_engine_subsystem(unreal.SubobjectDataSubsystem)
             handles = subsys.k2_gather_subobject_data_for_blueprint(bp)
             root_handle = handles[0] if handles else None
-            new_handle, fail = subsys.k2_add_new_subobject(unreal.AddNewSubobjectParams(parent_handle=root_handle, new_class=comp_class, blueprint_context=bp))
-            if new_handle.is_valid():
+            new_handle, fail = subsys.add_new_subobject(unreal.AddNewSubobjectParams(parent_handle=root_handle, new_class=comp_class, blueprint_context=bp))
+            if unreal.SubobjectDataBlueprintFunctionLibrary.is_handle_valid(new_handle):
+                try:
+                    subsys.rename_subobject(new_handle, unreal.Text('{{cname}}'))
+                except Exception:
+                    pass
                 unreal.BlueprintEditorLibrary.compile_blueprint(bp)
                 unreal.EditorAssetLibrary.save_asset('{{blueprint_path}}')
                 print(json.dumps({"success": True, "component": "{{cname}}"}))
@@ -109,7 +113,7 @@ else:
 
 	server.tool(
 		"add_blueprint_variable",
-		"Add a variable to a Blueprint.",
+		"Add a variable to a Blueprint. Through Python this needs UE 5.5 or newer; on older engines (such as 5.3) it needs the optional C++ plugin.",
 		{
 			blueprint_path: z.string().describe("Blueprint asset path"),
 			variable_name: z.string().describe("Variable name"),
@@ -129,28 +133,37 @@ else:
 				return { content: [{ type: "text", text: JSON.stringify(response.data) }] };
 			}
 
-			const typeMap: Record<string, string> = {
-				bool: "bool",
-				int: "int",
-				float: "float",
-				string: "string",
-				vector: "struct'/Script/CoreUObject.Vector'",
-				rotator: "struct'/Script/CoreUObject.Rotator'",
-				object: "object'/Script/Engine.Object'",
-			};
-			const pinType = typeMap[variable_type] || "bool";
-
 			const script = inlineScript(
 				`import unreal
 import json
 bp = unreal.EditorAssetLibrary.load_asset('{{blueprint_path}}')
-if bp:
-    unreal.BlueprintEditorLibrary.add_member_variable(bp, '{{variable_name}}', '${pinType}')
-    unreal.BlueprintEditorLibrary.compile_blueprint(bp)
-    print(json.dumps({"success": True, "variable": "{{variable_name}}", "type": "${variable_type}"}))
+lib = unreal.BlueprintEditorLibrary
+add_member = getattr(lib, 'add_member_variable', None)
+kind = '{{variable_type}}'
+if not bp:
+    print(json.dumps({"error": "Blueprint not found: {{blueprint_path}}"}))
+elif add_member is None:
+    # BlueprintEditorLibrary.add_member_variable was added in UE 5.5.
+    print(json.dumps({
+        "error": "Adding variables through Python needs UE 5.5 or newer.",
+        "hint": "Add the variable in the Blueprint editor, or use the optional UnrealMCPBridge plugin.",
+    }))
 else:
-    print(json.dumps({"error": "Blueprint not found"}))`,
-				{ blueprint_path, variable_name },
+    if kind in ('bool', 'int', 'string'):
+        pin_type = lib.get_basic_type_by_name(kind)
+    elif kind == 'float':
+        pin_type = lib.get_basic_type_by_name('real')
+    elif kind == 'vector':
+        pin_type = lib.get_struct_type(unreal.Vector.static_struct())
+    elif kind == 'rotator':
+        pin_type = lib.get_struct_type(unreal.Rotator.static_struct())
+    else:
+        pin_type = lib.get_object_reference_type(unreal.Object.static_class())
+    ok = add_member(bp, '{{variable_name}}', pin_type)
+    if ok:
+        lib.compile_blueprint(bp)
+    print(json.dumps({"success": bool(ok), "variable": "{{variable_name}}", "type": kind}))`,
+				{ blueprint_path, variable_name, variable_type },
 			);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };

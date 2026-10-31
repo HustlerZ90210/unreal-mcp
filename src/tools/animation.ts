@@ -54,12 +54,14 @@ else:
 import json
 seq = unreal.EditorAssetLibrary.load_asset('{{sequence_path}}')
 if seq and isinstance(seq, unreal.AnimSequence):
+    lib = unreal.AnimationLibrary
+    skeleton = seq.get_skeleton()
     result = {
         "name": seq.get_name(),
-        "length": seq.sequence_length,
-        "num_frames": seq.number_of_frames,
-        "rate_scale": seq.rate_scale,
-        "skeleton": seq.get_skeleton().get_name() if seq.get_skeleton() else None,
+        "length": lib.get_sequence_length(seq),
+        "num_frames": lib.get_num_frames(seq),
+        "rate_scale": lib.get_rate_scale(seq),
+        "skeleton": skeleton.get_name() if skeleton else None,
     }
     print(json.dumps(result, indent=2))
 else:
@@ -105,10 +107,15 @@ else:
 
 	server.tool(
 		"set_skeletal_mesh_lod",
-		"Configure LOD settings on a skeletal mesh.",
+		"Generate LODs on a skeletal mesh so it has the given total number of LODs (including LOD0).",
 		{
 			mesh_path: z.string().describe("Skeletal mesh asset path"),
-			lod_count: z.number().min(1).max(8).describe("Number of LODs to generate"),
+			lod_count: z
+				.number()
+				.int()
+				.min(1)
+				.max(8)
+				.describe("Total number of LODs the mesh should have"),
 		},
 		async ({ mesh_path, lod_count }) => {
 			manager.requireEditor();
@@ -117,15 +124,15 @@ else:
 import json
 mesh = unreal.EditorAssetLibrary.load_asset('{{mesh_path}}')
 if mesh and isinstance(mesh, unreal.SkeletalMesh):
-    lib = unreal.EditorSkeletalMeshLibrary
-    for i in range(1, ${lod_count}):
-        reduction = 0.5 ** i
-        lib.regenerate_lod(mesh, i, reduction)
+    # The library functions are deprecated in favour of the subsystem; use it when present.
+    sub_class = getattr(unreal, 'SkeletalMeshEditorSubsystem', None)
+    lib = unreal.get_editor_subsystem(sub_class) if sub_class else unreal.EditorSkeletalMeshLibrary
+    ok = lib.regenerate_lod(mesh, {{lod_count}}, True, False)
     unreal.EditorAssetLibrary.save_asset('{{mesh_path}}')
-    print(json.dumps({"success": True, "lods": ${lod_count}}))
+    print(json.dumps({"success": bool(ok), "lods": {{lod_count}}}))
 else:
     print(json.dumps({"error": "SkeletalMesh not found: {{mesh_path}}"}))`,
-				{ mesh_path },
+				{ mesh_path, lod_count },
 			);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };
@@ -158,32 +165,35 @@ else:
 
 	server.tool(
 		"apply_anim_modifier",
-		"Apply an animation modifier to an animation sequence.",
+		"Apply an animation modifier to an animation sequence. Needs the optional C++ plugin: Unreal's Python API does not expose applying modifiers.",
 		{
 			sequence_path: z.string().describe("AnimSequence asset path"),
 			modifier_class: z.string().describe("Animation modifier class name"),
 		},
 		async ({ sequence_path, modifier_class }) => {
 			manager.requireEditor();
-			const script = inlineScript(
-				`import unreal
-import json
-seq = unreal.EditorAssetLibrary.load_asset('{{sequence_path}}')
-if seq:
-    modifier = getattr(unreal, '{{modifier_class}}', None)
-    if modifier:
-        mod_instance = modifier()
-        unreal.AnimationLibrary.add_animation_modifier(seq, mod_instance)
-        unreal.AnimationLibrary.apply_all_animation_modifiers(seq)
-        print(json.dumps({"success": True}))
-    else:
-        print(json.dumps({"error": "Modifier class not found: {{modifier_class}}"}))
-else:
-    print(json.dumps({"error": "AnimSequence not found"}))`,
-				{ sequence_path, modifier_class },
-			);
-			const result = await manager.runPython(script);
-			return { content: [{ type: "text", text: result }] };
+
+			if (manager.hasPlugin && manager.plugin.hasCapability("apply_anim_modifier")) {
+				const response = await manager.plugin.sendCommand({
+					command: "apply_anim_modifier",
+					params: { sequence_path, modifier_class },
+				});
+				return { content: [{ type: "text", text: JSON.stringify(response.data) }] };
+			}
+
+			return {
+				content: [
+					{
+						type: "text",
+						text: JSON.stringify({
+							error:
+								"Applying animation modifiers is not available through Unreal's Python API (UE 5.3 to 5.6).",
+							hint: "Add the modifier and press Apply in the Animation Modifiers panel of the animation editor, or use the optional UnrealMCPBridge plugin.",
+						}),
+					},
+				],
+				isError: true,
+			};
 		},
 	);
 }

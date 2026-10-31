@@ -18,7 +18,9 @@
     "start": "node dist/bin.js",
     "test": "vitest",
     "lint": "biome check src/",
-    "fmt": "biome format --write src/"
+    "fmt": "biome format --write src/",
+    "check:ue-api": "tsx test/helpers/dump-snippets.ts .cache/ue-api/scripts && python3 tools/ue-api/check_scripts.py .cache/ue-api/scripts",
+    "api:manifest": "tsx test/helpers/dump-snippets.ts .cache/ue-api/scripts && python3 tools/ue-api/make_manifest.py .cache/ue-api/scripts && biome format --write src/tools/api-manifest.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

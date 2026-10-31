@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
+import { consoleScript } from "../utils/python.js";
 import { inlineScript } from "../utils/template.js";
 
 export function registerEditorUtilsTools(
@@ -61,30 +62,43 @@ else:
 
 	server.tool(
 		"generate_lods",
-		"Generate LODs for a static mesh.",
+		"Generate LODs for a static mesh, so it has the given total number of LODs (including LOD0).",
 		{
 			mesh_path: z.string().describe("Static mesh asset path"),
-			lod_count: z.number().min(1).max(8).default(3).describe("Number of LOD levels"),
+			lod_count: z
+				.number()
+				.int()
+				.min(1)
+				.max(8)
+				.default(3)
+				.describe("Total number of LODs, including LOD0"),
 		},
 		async ({ mesh_path, lod_count }) => {
 			manager.requireEditor();
 			const script = inlineScript(
 				`import unreal
 import json
+def mesh_lib():
+    # The Editor Scripting Utilities library is deprecated in favour of the subsystem (5.0+).
+    sub_class = getattr(unreal, 'StaticMeshEditorSubsystem', None)
+    return unreal.get_editor_subsystem(sub_class) if sub_class else unreal.EditorStaticMeshLibrary
 mesh = unreal.EditorAssetLibrary.load_asset('{{mesh_path}}')
 if mesh and isinstance(mesh, unreal.StaticMesh):
-    lib = unreal.EditorStaticMeshLibrary
-    options = unreal.EditorScriptingMeshReductionOptions()
-    for i in range(1, ${lod_count}):
-        reduction = unreal.EditorScriptingMeshReductionPerLODSettings()
-        reduction.percent_triangles = max(0.1, 1.0 - (i * 0.3))
-        options.reduction_options.append(reduction)
-    lib.set_lod_reduction_settings(mesh, ${lod_count - 1}, options)
+    lib = mesh_lib()
+    options_class = getattr(unreal, 'StaticMeshReductionOptions', None) or unreal.EditorScriptingMeshReductionOptions
+    settings_class = getattr(unreal, 'StaticMeshReductionSettings', None) or unreal.EditorScriptingMeshReductionSettings
+    # The first entry is LOD0 (the full mesh); each later LOD keeps fewer triangles.
+    settings = [
+        settings_class(percent_triangles=max(0.1, 1.0 - (i * 0.3)), screen_size=0.5 ** i)
+        for i in range({{lod_count}})
+    ]
+    options = options_class(auto_compute_lod_screen_size=False, reduction_settings=settings)
+    created = lib.set_lods(mesh, options)
     unreal.EditorAssetLibrary.save_asset('{{mesh_path}}')
-    print(json.dumps({"success": True, "lods": ${lod_count}}))
+    print(json.dumps({"success": True, "lods": created}))
 else:
     print(json.dumps({"error": "StaticMesh not found: {{mesh_path}}"}))`,
-				{ mesh_path },
+				{ mesh_path, lod_count },
 			);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };
@@ -106,22 +120,28 @@ else:
 			const script = inlineScript(
 				`import unreal
 import json
+def mesh_lib():
+    # The Editor Scripting Utilities library is deprecated in favour of the subsystem (5.0+).
+    sub_class = getattr(unreal, 'StaticMeshEditorSubsystem', None)
+    return unreal.get_editor_subsystem(sub_class) if sub_class else unreal.EditorStaticMeshLibrary
 mesh = unreal.EditorAssetLibrary.load_asset('{{mesh_path}}')
 if mesh and isinstance(mesh, unreal.StaticMesh):
-    lib = unreal.EditorStaticMeshLibrary
-    if '${type}' == 'box':
+    lib = mesh_lib()
+    kind = '{{type}}'
+    if kind == 'box':
         lib.add_simple_collisions(mesh, unreal.ScriptingCollisionShapeType.BOX)
-    elif '${type}' == 'sphere':
+    elif kind == 'sphere':
         lib.add_simple_collisions(mesh, unreal.ScriptingCollisionShapeType.SPHERE)
-    elif '${type}' == 'capsule':
+    elif kind == 'capsule':
         lib.add_simple_collisions(mesh, unreal.ScriptingCollisionShapeType.CAPSULE)
     else:
-        lib.set_convex_decomposition_collisions(mesh, 4, 16)
+        # 4 hulls, 16 vertices each, and the editor's default hull precision
+        lib.set_convex_decomposition_collisions(mesh, 4, 16, 100000)
     unreal.EditorAssetLibrary.save_asset('{{mesh_path}}')
-    print(json.dumps({"success": True, "type": "${type}"}))
+    print(json.dumps({"success": True, "type": kind}))
 else:
     print(json.dumps({"error": "StaticMesh not found: {{mesh_path}}"}))`,
-				{ mesh_path },
+				{ mesh_path, type },
 			);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };
@@ -130,7 +150,7 @@ else:
 
 	server.tool(
 		"generate_lightmap_uvs",
-		"Generate lightmap UVs for a static mesh.",
+		"Turn on lightmap UV generation for a static mesh and report its UV channels and lightmap settings.",
 		{
 			mesh_path: z.string().describe("Static mesh asset path"),
 		},
@@ -139,12 +159,22 @@ else:
 			const script = inlineScript(
 				`import unreal
 import json
+def mesh_lib():
+    # The Editor Scripting Utilities library is deprecated in favour of the subsystem (5.0+).
+    sub_class = getattr(unreal, 'StaticMeshEditorSubsystem', None)
+    return unreal.get_editor_subsystem(sub_class) if sub_class else unreal.EditorStaticMeshLibrary
 mesh = unreal.EditorAssetLibrary.load_asset('{{mesh_path}}')
 if mesh and isinstance(mesh, unreal.StaticMesh):
-    lib = unreal.EditorStaticMeshLibrary
-    lib.generate_planar_uv_channel(mesh, 0, unreal.Vector(0,0,1), unreal.Vector(0,0,0))
+    lib = mesh_lib()
+    ok = lib.set_generate_lightmap_uv(mesh, True)
+    info = {"success": bool(ok), "uv_channels": lib.get_num_uv_channels(mesh, 0)}
+    for key in ('light_map_coordinate_index', 'light_map_resolution'):
+        try:
+            info[key] = mesh.get_editor_property(key)
+        except Exception:
+            pass
     unreal.EditorAssetLibrary.save_asset('{{mesh_path}}')
-    print(json.dumps({"success": True}))
+    print(json.dumps(info))
 else:
     print(json.dumps({"error": "StaticMesh not found: {{mesh_path}}"}))`,
 				{ mesh_path },
@@ -156,20 +186,18 @@ else:
 
 	server.tool("undo", "Undo the last editor action.", {}, async () => {
 		manager.requireEditor();
-		const script = `import unreal
-import json
-success = unreal.SystemLibrary.execute_console_command(None, 'transaction undo')
-print(json.dumps({"undone": True}))`;
+		const script = consoleScript(`import json
+success = run_console('transaction undo')
+print(json.dumps({"undone": True}))`);
 		const result = await manager.runPython(script);
 		return { content: [{ type: "text", text: result }] };
 	});
 
 	server.tool("redo", "Redo the last undone editor action.", {}, async () => {
 		manager.requireEditor();
-		const script = `import unreal
-import json
-success = unreal.SystemLibrary.execute_console_command(None, 'transaction redo')
-print(json.dumps({"redone": True}))`;
+		const script = consoleScript(`import json
+success = run_console('transaction redo')
+print(json.dumps({"redone": True}))`);
 		const result = await manager.runPython(script);
 		return { content: [{ type: "text", text: result }] };
 	});

@@ -229,16 +229,18 @@ else:
 import json
 seq = unreal.EditorAssetLibrary.load_asset('{{sequence_path}}')
 if seq:
-    world = unreal.EditorLevelLibrary.get_editor_world()
-    bindings = []
-    movie_scene = seq.get_movie_scene()
-    for binding in seq.get_bindings():
-        bindings.append(binding)
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    bindings = list(seq.get_bindings())
     if bindings:
-        export_options = unreal.FbxExportOption()
-        success = unreal.SequencerTools.export_level_sequence_fbx(
-            world, seq, bindings, export_options, '{{output_path}}'
+        params = unreal.SequencerExportFBXParams(
+            world=world,
+            sequence=seq,
+            root_sequence=seq,
+            bindings=bindings,
+            override_options=unreal.FbxExportOption(),
+            fbx_file_name='{{output_path}}',
         )
+        success = unreal.SequencerTools.export_level_sequence_fbx(params)
         print(json.dumps({"success": success, "output": "{{output_path}}"}))
     else:
         print(json.dumps({"error": "No bindings to export"}))
@@ -253,27 +255,29 @@ else:
 
 	server.tool(
 		"render_sequence",
-		"Queue a Movie Render Queue job for a sequence.",
+		"Queue a Movie Render Queue job for a sequence. Needs the Movie Render Pipeline plugin enabled.",
 		{
 			sequence_path: z.string().describe("LevelSequence asset path"),
-			output_directory: z.string().optional().describe("Output directory for rendered frames"),
 		},
-		async ({ sequence_path, output_directory }) => {
+		async ({ sequence_path }) => {
 			manager.requireEditor();
-			const outDir = output_directory || "{project}/Saved/MovieRenders";
 			const script = inlineScript(
 				`import unreal
 import json
 seq = unreal.EditorAssetLibrary.load_asset('{{sequence_path}}')
-if seq:
-    subsys = unreal.get_editor_subsystem(unreal.MoviePipelineQueueSubsystem)
-    queue = subsys.get_queue()
-    job = queue.allocate_new_job(unreal.MoviePipelineExecutorJob)
-    job.sequence = unreal.SoftObjectPath('{{sequence_path}}')
-    job.map = unreal.SoftObjectPath(unreal.EditorLevelLibrary.get_editor_world().get_path_name())
-    print(json.dumps({"success": True, "job": job.get_name(), "hint": "Open Movie Render Queue to configure settings and render"}))
+queue_class = getattr(unreal, 'MoviePipelineQueueSubsystem', None)
+job_class = getattr(unreal, 'MoviePipelineExecutorJob', None)
+if not seq:
+    print(json.dumps({"error": "Sequence not found"}))
+elif queue_class is None or job_class is None:
+    print(json.dumps({"error": "Movie Render Queue is not loaded.", "hint": "Enable the Movie Render Pipeline plugin and restart the editor."}))
 else:
-    print(json.dumps({"error": "Sequence not found"}))`,
+    world = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world()
+    queue = unreal.get_editor_subsystem(queue_class).get_queue()
+    job = queue.allocate_new_job(job_class)
+    job.sequence = unreal.SoftObjectPath('{{sequence_path}}')
+    job.map = unreal.SoftObjectPath(world.get_path_name())
+    print(json.dumps({"success": True, "job": job.get_name(), "hint": "Open Movie Render Queue to set the output folder and render"}))`,
 				{ sequence_path },
 			);
 			const result = await manager.runPython(script);

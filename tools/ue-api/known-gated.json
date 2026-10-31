@@ -1,0 +1,8 @@
+{
+  "_comment": "API calls that a tool only makes after checking the engine has them, so a missing one is expected. Format: tool -> [Class.member]. check_scripts.py hides these; check_ue_compat reports them separately.",
+  "add_blueprint_variable": [
+    "BlueprintEditorLibrary.get_basic_type_by_name",
+    "BlueprintEditorLibrary.get_struct_type",
+    "BlueprintEditorLibrary.get_object_reference_type"
+  ]
+}

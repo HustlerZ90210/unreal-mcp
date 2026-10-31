@@ -4,6 +4,53 @@ import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
 import { inlineScript } from "../utils/template.js";
 
+/**
+ * Python helpers shared by the material expression tools.
+ *
+ * MaterialEditingLibrary has no "list all expressions" call, so expressions are found by object
+ * name (they are sub-objects of the material) and, failing that, by walking the graph back from
+ * the material's output pins. Nodes that are not connected to anything can only be found by name.
+ */
+const MATERIAL_HELPERS_PY = `def mcp_connected_expressions(material):
+    mel = unreal.MaterialEditingLibrary
+    found = {}
+    stack = []
+    for attr in dir(unreal.MaterialProperty):
+        if not attr.startswith('MP_'):
+            continue
+        try:
+            node = mel.get_material_property_input_node(material, getattr(unreal.MaterialProperty, attr))
+        except Exception:
+            node = None
+        if node is not None:
+            stack.append(node)
+    while stack:
+        node = stack.pop()
+        key = node.get_name()
+        if key in found:
+            continue
+        found[key] = node
+        try:
+            for upstream in (mel.get_inputs_for_material_expression(material, node) or []):
+                if upstream is not None:
+                    stack.append(upstream)
+        except Exception:
+            pass
+    return list(found.values())
+
+def mcp_find_expression(material, name):
+    try:
+        found = unreal.find_object(material, name)
+    except Exception:
+        found = None
+    if found is not None:
+        return found
+    for e in mcp_connected_expressions(material):
+        if e.get_name() == name:
+            return e
+    return None
+`;
+
 export function registerMaterialTools(
 	server: McpServer,
 	manager: ConnectionManager,
@@ -112,7 +159,7 @@ else:
 
 	server.tool(
 		"connect_material_expressions",
-		"Wire two material expression nodes together.",
+		"Connect one expression's output pin to another expression's input pin.",
 		{
 			material_path: z.string().describe("Material asset path"),
 			from_expression_name: z.string().describe("Source expression name"),
@@ -137,22 +184,17 @@ else:
 			const script = inlineScript(
 				`import unreal
 import json
+${MATERIAL_HELPERS_PY}
 mel = unreal.MaterialEditingLibrary
 material = unreal.EditorAssetLibrary.load_asset('{{material_path}}')
 if material:
-    expressions = mel.get_material_expressions(material)
-    from_expr = None
-    to_expr = None
-    for e in expressions:
-        if e.get_name() == '{{from_expression_name}}':
-            from_expr = e
-        if e.get_name() == '{{to_expression_name}}':
-            to_expr = e
+    from_expr = mcp_find_expression(material, '{{from_expression_name}}')
+    to_expr = mcp_find_expression(material, '{{to_expression_name}}')
     if from_expr and to_expr:
         success = mel.connect_material_expressions(from_expr, '{{from_output_name}}', to_expr, '{{to_input_name}}')
         print(json.dumps({"success": success}))
     else:
-        print(json.dumps({"error": "Expression(s) not found", "available": [e.get_name() for e in expressions]}))
+        print(json.dumps({"error": "Expression(s) not found", "available": [e.get_name() for e in mcp_connected_expressions(material)]}))
 else:
     print(json.dumps({"error": "Material not found"}))`,
 				{
@@ -198,19 +240,22 @@ else:
 			const script = inlineScript(
 				`import unreal
 import json
+import re
+${MATERIAL_HELPERS_PY}
 mel = unreal.MaterialEditingLibrary
 material = unreal.EditorAssetLibrary.load_asset('{{material_path}}')
 if material:
-    expressions = mel.get_material_expressions(material)
-    expr = None
-    for e in expressions:
-        if e.get_name() == '{{expression_name}}':
-            expr = e
-            break
+    expr = mcp_find_expression(material, '{{expression_name}}')
     if expr:
-        prop = getattr(unreal.MaterialProperty, '{{material_property}}')
-        success = mel.connect_material_property(expr, '{{output_name}}', prop)
-        print(json.dumps({"success": success}))
+        # The enum values are upper snake case: MP_BaseColor -> MP_BASE_COLOR
+        wanted = 'MP_' + re.sub(r'(?<!^)(?=[A-Z])', '_', '{{material_property}}'.replace('MP_', '', 1)).upper()
+        prop = getattr(unreal.MaterialProperty, wanted, None)
+        if prop is None:
+            available = [a for a in dir(unreal.MaterialProperty) if a.startswith('MP_')]
+            print(json.dumps({"error": "Material property not available through Python: " + wanted, "available": available}))
+        else:
+            success = mel.connect_material_property(expr, '{{output_name}}', prop)
+            print(json.dumps({"success": success}))
     else:
         print(json.dumps({"error": "Expression not found: {{expression_name}}"}))
 else:
@@ -234,15 +279,14 @@ else:
 			const script = inlineScript(
 				`import unreal
 import json
+${MATERIAL_HELPERS_PY}
 mel = unreal.MaterialEditingLibrary
 material = unreal.EditorAssetLibrary.load_asset('{{material_path}}')
 if material:
-    expressions = mel.get_material_expressions(material)
-    for e in expressions:
-        if e.get_name() == '{{expression_name}}':
-            mel.delete_material_expression(material, e)
-            print(json.dumps({"success": True}))
-            break
+    expr = mcp_find_expression(material, '{{expression_name}}')
+    if expr:
+        mel.delete_material_expression(material, expr)
+        print(json.dumps({"success": True}))
     else:
         print(json.dumps({"error": "Expression not found: {{expression_name}}"}))
 else:
@@ -256,7 +300,7 @@ else:
 
 	server.tool(
 		"list_material_expressions",
-		"List all expression nodes in a material.",
+		"List the expression nodes in a material that are connected to an output (plus the total count).",
 		{
 			material_path: z.string().describe("Material asset path"),
 		},
@@ -265,11 +309,18 @@ else:
 			const script = inlineScript(
 				`import unreal
 import json
+${MATERIAL_HELPERS_PY}
 mel = unreal.MaterialEditingLibrary
 material = unreal.EditorAssetLibrary.load_asset('{{material_path}}')
 if material:
-    expressions = mel.get_material_expressions(material)
-    result = [{"name": e.get_name(), "class": e.get_class().get_name()} for e in expressions]
+    connected = mcp_connected_expressions(material)
+    total = mel.get_num_material_expressions(material)
+    result = {
+        "total_expressions": total,
+        "connected": [{"name": e.get_name(), "class": e.get_class().get_name()} for e in connected],
+    }
+    if total > len(connected):
+        result["note"] = "Nodes that are not connected to any output cannot be listed through Python. They can still be used by name."
     print(json.dumps(result, indent=2))
 else:
     print(json.dumps({"error": "Material not found"}))`,

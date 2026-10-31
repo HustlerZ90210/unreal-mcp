@@ -1,14 +1,14 @@
 # unreal-mcp
 
-The most comprehensive MCP server for Unreal Engine — **127 tools** across **16 subsystems**, with **4 transport layers** and **no mandatory C++ plugin**.
+The most comprehensive MCP server for Unreal Engine — **129 tools** across **17 subsystems**, with **4 transport layers** and **no mandatory C++ plugin**.
 
-> **Beta** — This project is under active development and testing. Tools are being validated against UE 5.6. Some tools may not work as expected. Bug reports and contributions are welcome.
+> **Beta** — This project is under active development and testing. The tools' Python is checked against the Unreal Engine **5.3** Python API (see [docs/ue-compat.md](docs/ue-compat.md) for what that covers and what it does not) and has not been run end to end in a real 5.3.2 editor by the maintainers of this fork. Run `check_ue_compat` in your editor to see which tools your engine build can run. Bug reports and contributions are welcome.
 
 ## Why This One?
 
 | | unreal-mcp | [flopperam](https://github.com/flopperam/unreal-engine-mcp) | [chongdashu](https://github.com/chongdashu/unreal-mcp) | [kvick-games](https://github.com/kvick-games/UnrealMCP) | [ChiR24](https://github.com/ChiR24/Unreal_mcp) |
 |---|---|---|---|---|---|
-| Tools | **127** | ~30 | ~20 | ~5 | 36 |
+| Tools | **129** | ~30 | ~20 | ~5 | 36 |
 | Transports | **4** | 1 | 1 | 1 | 1 |
 | Requires C++ plugin | **No** | Yes | Yes | Yes | Yes |
 | Build/package tools | **Yes** | No | No | No | Partial |
@@ -89,6 +89,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/App
 | **world-partition** | 4 | Data layers, streaming sources, loaded cells |
 | **remote-control-presets** | 5 | List/get/set preset properties, call preset functions |
 | **plugin** | 3 | List, enable, disable plugins in .uproject |
+| **diagnostics** | 2 | Engine version and connections, `check_ue_compat` self-test for your engine build |
 
 ## Architecture
 
@@ -126,6 +127,7 @@ Three-layer priority: CLI args > environment variables > config file > defaults.
 |----------|---------|-------------|
 | `UNREAL_MCP_PROJECT_PATH` | — | Path to .uproject file or project directory |
 | `UNREAL_MCP_ENGINE_PATH` | auto-detect | UE engine install path |
+| `UNREAL_MCP_ENGINE_VERSION` | auto-detect | Engine version, e.g. `5.3.2`. Read from the engine install or the project when not set; the running editor overrides it |
 | `UNREAL_MCP_RC_PORT` | 30010 | Remote Control API port |
 | `UNREAL_MCP_PYTHON_PORT` | 6776 | Python Remote Execution port |
 | `UNREAL_MCP_PLATFORM` | Win64 | Target platform |
@@ -183,14 +185,20 @@ Place `.unrealmcp.json` in your project directory or home directory:
 
 Install the C++ plugin from `plugin/UnrealMCPBridge/` into your project's `Plugins/` directory. This enables `add_graph_node`, `connect_graph_nodes`, and `remove_graph_node`.
 
+## Unreal Engine Versions
+
+Written for and checked against **Unreal Engine 5.3.2**. Some tools need a newer engine (for example `add_blueprint_variable` needs 5.5) and say so instead of failing. After connecting to an editor, run `check_ue_compat` to see which tools your engine build can run. Details, setup steps and known limits: [docs/ue-compat.md](docs/ue-compat.md).
+
 ## Development
 
 ```bash
-npm run dev        # Watch-mode dev server
-npm run build      # Compile TypeScript
-npm run lint       # Biome linter
-npm run fmt        # Biome formatter
-npm test           # Run tests
+npm run dev          # Watch-mode dev server
+npm run build        # Compile TypeScript
+npm run lint         # Biome linter
+npm run fmt          # Biome formatter
+npm test             # Run tests (no Unreal install needed)
+npm run check:ue-api # Check every tool's Python against the Unreal 5.3 Python API docs (needs Python 3 and network)
+npm run api:manifest # Regenerate src/tools/api-manifest.ts after adding or changing a tool
 ```
 
 ## License

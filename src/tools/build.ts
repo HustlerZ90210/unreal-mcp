@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ConnectionManager } from "../transports/connection-manager.js";
 import type { UnrealMcpConfig } from "../types.js";
+import { ubtTargetName } from "../utils/project.js";
 
 export function registerBuildTools(
 	server: McpServer,
@@ -12,7 +13,12 @@ export function registerBuildTools(
 		"build_target",
 		"Build a C++ target using UnrealBuildTool. Compiles the project's C++ code.",
 		{
-			target: z.string().default("Editor").describe("Build target: Editor, Game, Client, Server"),
+			target: z
+				.string()
+				.default("Editor")
+				.describe(
+					"Build target type (Editor, Game, Client, Server) or an exact target name such as MyGameEditor",
+				),
 			platform: z
 				.string()
 				.optional()
@@ -24,11 +30,12 @@ export function registerBuildTools(
 			clean: z.boolean().default(false).describe("Clean build"),
 		},
 		async ({ target, platform, configuration, clean }) => {
+			// UnrealBuildTool wants a real target name (MyGameEditor), not the type word (Editor).
 			const args = [
-				`${target}`,
+				ubtTargetName(target, manager.subprocess.projectName),
 				platform || config.platform,
 				configuration || config.configuration,
-				`-project=${config.projectPath}`,
+				`-project=${manager.subprocess.uprojectPath}`,
 			];
 			if (clean) args.push("-clean");
 
@@ -54,6 +61,7 @@ export function registerBuildTools(
 			run: z.boolean().default(false).describe("Run after packaging"),
 			iterate: z.boolean().default(false).describe("Iterative cook (faster rebuilds)"),
 			compressed: z.boolean().default(false).describe("Compress pak files"),
+			pak: z.boolean().default(false).describe("Package cooked content into .pak files"),
 			platform: z.string().optional().describe("Target platform"),
 			configuration: z.string().optional().describe("Build configuration"),
 			additional_args: z.array(z.string()).optional().describe("Additional UAT arguments"),
@@ -69,6 +77,7 @@ export function registerBuildTools(
 				run: opts.run,
 				iterate: opts.iterate,
 				compressed: opts.compressed,
+				pak: opts.pak,
 				platform: opts.platform,
 				configuration: opts.configuration,
 				additionalArgs: opts.additional_args,
@@ -129,6 +138,7 @@ export function registerBuildTools(
 				cook: true,
 				stage: true,
 				package: true,
+				pak: true,
 				compressed,
 				platform,
 				configuration,
@@ -218,13 +228,18 @@ export function registerBuildTools(
 		"clean_project",
 		"Clean build artifacts for the project.",
 		{
+			target: z
+				.string()
+				.default("Editor")
+				.describe("Target type (Editor, Game, Client, Server) or an exact target name"),
 			platform: z.string().optional().describe("Target platform"),
 		},
-		async ({ platform }) => {
+		async ({ target, platform }) => {
 			const result = await manager.subprocess.runUBT([
-				config.projectPath,
+				ubtTargetName(target, manager.subprocess.projectName),
 				platform || config.platform,
 				config.configuration,
+				`-project=${manager.subprocess.uprojectPath}`,
 				"-clean",
 			]);
 			return {

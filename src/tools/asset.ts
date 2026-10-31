@@ -131,15 +131,24 @@ else:
 import json
 registry = unreal.AssetRegistryHelpers.get_asset_registry()
 path = '{{asset_path}}'
+direction = '{{direction}}'
+# The registry calls need an options struct; ask for hard and soft package references.
+options = unreal.AssetRegistryDependencyOptions(
+    include_soft_package_references=True,
+    include_hard_package_references=True,
+    include_searchable_names=False,
+    include_soft_management_references=False,
+    include_hard_management_references=False,
+)
 result = {}
-if '${direction}' in ('dependencies', 'both'):
-    deps = registry.get_dependencies(path)
+if direction in ('dependencies', 'both'):
+    deps = registry.get_dependencies(path, options)
     result['dependencies'] = [str(d) for d in deps] if deps else []
-if '${direction}' in ('referencers', 'both'):
-    refs = registry.get_referencers(path)
+if direction in ('referencers', 'both'):
+    refs = registry.get_referencers(path, options)
     result['referencers'] = [str(r) for r in refs] if refs else []
 print(json.dumps(result, indent=2))`,
-				{ asset_path },
+				{ asset_path, direction },
 			);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };
@@ -201,14 +210,24 @@ print(json.dumps({"success": result is not None, "path": '{{destination_path}}' 
 				`import unreal
 import json
 registry = unreal.AssetRegistryHelpers.get_asset_registry()
-refs = registry.get_referencers('{{asset_path}}')
-ref_list = [str(r) for r in refs] if refs else []
-if ref_list and not ${force ? "True" : "False"}:
+options = unreal.AssetRegistryDependencyOptions(
+    include_soft_package_references=True,
+    include_hard_package_references=True,
+    include_searchable_names=False,
+    include_soft_management_references=False,
+    include_hard_management_references=False,
+)
+asset_path = '{{asset_path}}'
+# Referencers are looked up by package name, so drop the ".AssetName" part of an object path.
+package_name = asset_path.split('.')[0]
+refs = registry.get_referencers(package_name, options)
+ref_list = [str(r) for r in refs if str(r) != package_name] if refs else []
+if ref_list and not {{force}}:
     print(json.dumps({"error": "Asset has referencers", "referencers": ref_list, "hint": "Use force=true to delete anyway"}))
 else:
-    success = unreal.EditorAssetLibrary.delete_asset('{{asset_path}}')
+    success = unreal.EditorAssetLibrary.delete_asset(asset_path)
     print(json.dumps({"deleted": success}))`,
-				{ asset_path },
+				{ asset_path, force },
 			);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };
@@ -278,23 +297,35 @@ print(json.dumps({"success": success, "output": '{{output_path}}'}))`,
 		"Run data validation on assets in a directory.",
 		{
 			directory: z.string().default("/Game").describe("Content directory to validate"),
+			limit: z
+				.number()
+				.int()
+				.min(1)
+				.max(500)
+				.default(50)
+				.describe("Maximum number of assets to validate"),
 		},
-		async ({ directory }) => {
+		async ({ directory, limit }) => {
 			manager.requireEditor();
 			const script = inlineScript(
 				`import unreal
 import json
 subsys = unreal.get_editor_subsystem(unreal.EditorValidatorSubsystem)
 registry = unreal.AssetRegistryHelpers.get_asset_registry()
-assets = registry.get_assets_by_path('{{directory}}', True) or []
-asset_list = [a for a in assets[:50]]
-results = subsys.validate_assets_with_settings(
-    asset_list,
-    unreal.ValidateAssetsSettings(),
-    unreal.ValidateAssetsResults()
-)
-print(json.dumps({"validated": True}))`,
-				{ directory },
+assets = list(registry.get_assets_by_path('{{directory}}', True) or [])
+asset_list = assets[:{{limit}}]
+# Returns (number of assets validated, ValidateAssetsResults)
+outcome = subsys.validate_assets_with_settings(asset_list, unreal.ValidateAssetsSettings())
+results = outcome[-1]
+summary = {"validated": True, "requested": len(asset_list)}
+if results is not None:
+    for field in ('num_checked', 'num_valid', 'num_invalid', 'num_warnings', 'num_skipped', 'num_unable_to_validate'):
+        try:
+            summary[field] = results.get_editor_property(field)
+        except Exception:
+            pass
+print(json.dumps(summary))`,
+				{ directory, limit },
 			);
 			const result = await manager.runPython(script);
 			return { content: [{ type: "text", text: result }] };

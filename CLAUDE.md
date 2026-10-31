@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-An MCP (Model Context Protocol) server for Unreal Engine — 127 tools across 16 subsystems. TypeScript/Node.js, ESM, communicates with UE via four transport layers.
+An MCP (Model Context Protocol) server for Unreal Engine — 129 tools across 17 subsystems. TypeScript/Node.js, ESM, communicates with UE via four transport layers.
 
 ## Commands
 
@@ -15,6 +15,8 @@ npm start          # Run compiled server
 npm test           # Run tests (vitest)
 npm run lint       # Biome check src/
 npm run fmt        # Biome format --write src/
+npm run check:ue-api  # Type-check every tool's Python against the UE 5.3 Python API docs
+npm run api:manifest  # Regenerate src/tools/api-manifest.ts after changing a tool
 ```
 
 ## Architecture
@@ -24,7 +26,7 @@ stdio (MCP protocol)
   → bin.ts                    # CLI entry, creates server + StdioTransport
   → index.ts                  # createServer() factory, registers tools & resources
   → ConnectionManager         # Orchestrates all 4 transports
-  → 16 Tool Modules           # Each exports register*Tools(server, manager, config)
+  → 17 Tool Modules           # Each exports register*Tools(server, manager, config)
   → 4 Transports → Unreal Engine
 ```
 
@@ -64,7 +66,7 @@ This project was built referencing four existing Unreal MCP implementations:
 | [kvick-games/UnrealMCP](https://github.com/kvick-games/UnrealMCP) | C++ | ~5 | TCP on port 13377 | Early WIP, minimal toolset |
 | [ChiR24/Unreal_mcp](https://github.com/ChiR24/Unreal_mcp) | TypeScript + C++ | 36 | TCP on port 8091 | Action-based dispatch, good security defaults |
 
-Our differentiator: 127 tools, 4 transport layers (most projects have 1), graceful degradation, no mandatory C++ plugin.
+Our differentiator: 129 tools, 4 transport layers (most projects have 1), graceful degradation, no mandatory C++ plugin.
 
 ## Plugin Enhancement Layer
 
@@ -79,7 +81,11 @@ The `PluginBridgeClient` supports:
 - **Request IDs**: Each command gets a UUID for response matching
 - **Streaming frame parser**: Proper length-prefix parsing for the receive path
 
-Tools use `manager.executeWithPluginFallback()` for the dual-path pattern: tries plugin first, falls back to Python on failure or absence. Always pass all Python scripts through `inlineScript()` with `{{var}}` — never use raw `${var}` in Python code strings.
+Tools use `manager.executeWithPluginFallback()` for the dual-path pattern: tries plugin first, falls back to Python on failure or absence. Always pass all Python scripts through `inlineScript()` with `{{var}}` — never put a tool parameter into Python with raw `${var}`. Static helper constants (like `MATERIAL_HELPERS_PY`) may be interpolated.
+
+## Targeting Unreal Engine 5.3.2
+
+The target engine is 5.3.2 (see `docs/ue-compat.md`). Before using an `unreal.*` API in a tool, confirm it exists in the 5.3 Python docs (`https://dev.epicgames.com/documentation/en-us/unreal-engine/python-api/class/<Class>?application_version=5.3`). Many functions return several values as a tuple (`handle, fail_reason = subsystem.add_new_subobject(params)`), and structs do not have the C++ helper methods (`handle.is_valid()` does not exist; use the function library). If a tool must use something newer, check for it with `getattr(unreal, ...)` in the script, call `manager.requireEngineAtLeast()`, and list it in `tools/ue-api/known-gated.json`. After changing a tool run `npm test`, `npm run check:ue-api` and `npm run api:manifest`. Nothing has been run in a real editor by the fork's maintainers, so say so when reporting results.
 
 ## Code Style
 
