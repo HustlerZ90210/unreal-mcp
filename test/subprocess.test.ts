@@ -2,11 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-	needsCmdShell,
-	quoteCmdArg,
-	runProcess,
-} from "../src/transports/subprocess.js";
+import { needsCmdShell, quoteCmdArg, runProcess } from "../src/transports/subprocess.js";
 import { TimeoutError, UnrealMcpError } from "../src/utils/errors.js";
 
 describe("quoteCmdArg", () => {
@@ -111,10 +107,12 @@ describe("runProcess", () => {
 		expect(result.stdout.trimEnd().endsWith("THE END")).toBe(true);
 	});
 
+	// RunUAT.bat forwards %* to the tool. (%2 would see "-x=1" split at the "=": cmd.exe treats it as a
+	// separator in batch parameters, which is why this checks the whole command line.)
 	it.skipIf(process.platform !== "win32")("runs a batch file in a folder with spaces", async () => {
-		const bat = script("run uat.bat", "@echo off\r\necho [%~1] [%~2]\r\nexit /b 4\r\n");
+		const bat = script("run uat.bat", "@echo off\r\necho ARGS: %*\r\nexit /b 4\r\n");
 		const result = await runProcess(bat, ["with space", "-x=1"], 10_000, { cwd: dir });
 		expect(result.exitCode).toBe(4);
-		expect(result.stdout).toContain("[with space] [-x=1]");
+		expect(result.stdout).toContain('ARGS: "with space" -x=1');
 	});
 });

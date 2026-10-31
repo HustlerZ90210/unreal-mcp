@@ -31,7 +31,8 @@ describe("parseEngineVersion", () => {
 });
 
 describe("version comparison", () => {
-	const v = (s: string) => parseEngineVersion(s) as NonNullable<ReturnType<typeof parseEngineVersion>>;
+	const v = (s: string) =>
+		parseEngineVersion(s) as NonNullable<ReturnType<typeof parseEngineVersion>>;
 
 	it("orders by major, minor, then patch", () => {
 		expect(compareVersions(v("5.3.2"), v("5.3.2"))).toBe(0);
@@ -75,7 +76,10 @@ describe("readBuildVersion", () => {
 		expect(readBuildVersion(dir)).toBeUndefined();
 		writeFileSync(join(dir, "Engine", "Build", "Build.version"), "{ not json");
 		expect(readBuildVersion(dir)).toBeUndefined();
-		writeFileSync(join(dir, "Engine", "Build", "Build.version"), JSON.stringify({ MajorVersion: 5 }));
+		writeFileSync(
+			join(dir, "Engine", "Build", "Build.version"),
+			JSON.stringify({ MajorVersion: 5 }),
+		);
 		expect(readBuildVersion(dir)).toBeUndefined();
 	});
 });

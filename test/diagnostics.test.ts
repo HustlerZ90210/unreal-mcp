@@ -1,9 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
-import { registerAllTools } from "../src/tools/index.js";
 import { API_MANIFEST } from "../src/tools/api-manifest.js";
 import { registerDiagnosticsTools } from "../src/tools/diagnostics.js";
-import { collectScripts, createFakeManager, createFakeServer, testConfig } from "./helpers/harness.js";
+import { registerAllTools } from "../src/tools/index.js";
+import {
+	collectScripts,
+	createFakeManager,
+	createFakeServer,
+	testConfig,
+} from "./helpers/harness.js";
 import { PYTHON } from "./helpers/python.js";
 
 describe("api manifest", () => {
@@ -30,9 +35,10 @@ describe("api manifest", () => {
 	it("only names tools that exist", async () => {
 		const { scripts } = await collectScripts(registerAllTools as never, testConfig(), "plain");
 		const tools = new Set(scripts.map((s) => s.tool));
-		const unknown = [...Object.keys(API_MANIFEST.tools), ...Object.keys(API_MANIFEST.symbols)].filter(
-			(t) => !tools.has(t),
-		);
+		const unknown = [
+			...Object.keys(API_MANIFEST.tools),
+			...Object.keys(API_MANIFEST.symbols),
+		].filter((t) => !tools.has(t));
 		expect(unknown).toEqual([]);
 	});
 
@@ -79,7 +85,11 @@ sys.modules["unreal"] = unreal
 exec(compile(cfg["script"], "check_ue_compat", "exec"), {"__name__": "__main__"})
 `;
 		const run = spawnSync(PYTHON as string, ["-I", "-c", harness], {
-			input: JSON.stringify({ script: recorded[0], manifest: API_MANIFEST, remove: options.remove }),
+			input: JSON.stringify({
+				script: recorded[0],
+				manifest: API_MANIFEST,
+				remove: options.remove,
+			}),
 			encoding: "utf-8",
 		});
 		if (run.status !== 0) throw new Error(run.stderr);
@@ -103,7 +113,11 @@ describe.skipIf(!PYTHON)("check_ue_compat", () => {
 	it("names the tools that call an API the engine lacks", async () => {
 		const result = (await runCompatCheck({
 			remove: ["EditorAssetLibrary.save_asset"],
-		})) as { ok: boolean; missing: { api: string; tools: string[] }[]; tools_that_will_fail: string[] };
+		})) as {
+			ok: boolean;
+			missing: { api: string; tools: string[] }[];
+			tools_that_will_fail: string[];
+		};
 		expect(result.ok).toBe(false);
 		expect(result.missing.map((m) => m.api)).toEqual(["unreal.EditorAssetLibrary.save_asset"]);
 		expect(result.missing[0].tools).toContain("generate_lods");

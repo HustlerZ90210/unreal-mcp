@@ -10,9 +10,7 @@ describe("substituteVars", () => {
 	});
 
 	it("writes booleans as Python literals", () => {
-		expect(substituteVars("a={{on}} b={{off}}", { on: true, off: false })).toBe(
-			"a=True b=False",
-		);
+		expect(substituteVars("a={{on}} b={{off}}", { on: true, off: false })).toBe("a=True b=False");
 	});
 
 	it("writes numbers as numeric literals", () => {

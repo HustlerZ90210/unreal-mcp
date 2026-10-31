@@ -97,6 +97,9 @@ describe("loadConfig", () => {
 	});
 
 	it("limits tools to the enabled modules", () => {
-		expect(loadConfig(["--modules", "console, asset"]).enabledModules).toEqual(["console", "asset"]);
+		expect(loadConfig(["--modules", "console, asset"]).enabledModules).toEqual([
+			"console",
+			"asset",
+		]);
 	});
 });

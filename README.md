@@ -194,7 +194,7 @@ Written for and checked against **Unreal Engine 5.3.2**. Some tools need a newer
 ```bash
 npm run dev          # Watch-mode dev server
 npm run build        # Compile TypeScript
-npm run lint         # Biome linter
+npm run lint         # Biome linter (src and test)
 npm run fmt          # Biome formatter
 npm test             # Run tests (no Unreal install needed)
 npm run check:ue-api # Check every tool's Python against the Unreal 5.3 Python API docs (needs Python 3 and network)

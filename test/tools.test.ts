@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { registerAllTools } from "../src/tools/index.js";
-import { ALL_MODULES } from "../src/types.js";
 import { ConnectionManager } from "../src/transports/connection-manager.js";
-import { UnsupportedEngineError } from "../src/utils/errors.js";
+import { ALL_MODULES } from "../src/types.js";
 import { parseEngineVersion } from "../src/utils/engine-version.js";
+import { UnsupportedEngineError } from "../src/utils/errors.js";
 import { createFakeManager, createFakeServer, testConfig } from "./helpers/harness.js";
 
 function registerEverything(config = testConfig()) {
@@ -63,10 +63,14 @@ describe("engine version gate", () => {
 	});
 
 	it("allows a feature the engine supports", async () => {
-		await expect(managerWithVersion("5.3.2").requireEngineAtLeast("5.3", "x")).resolves.toBeUndefined();
+		await expect(
+			managerWithVersion("5.3.2").requireEngineAtLeast("5.3", "x"),
+		).resolves.toBeUndefined();
 	});
 
 	it("lets the call through when the version is unknown", async () => {
-		await expect(managerWithVersion(undefined).requireEngineAtLeast("5.5", "x")).resolves.toBeUndefined();
+		await expect(
+			managerWithVersion(undefined).requireEngineAtLeast("5.5", "x"),
+		).resolves.toBeUndefined();
 	});
 });

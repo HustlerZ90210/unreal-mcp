@@ -69,7 +69,8 @@ export function createFakeManager(recording: Recording, opts: { hasPlugin?: bool
 					if (method === "then") return undefined;
 					return async (...args: unknown[]) => {
 						recording.calls.push({ target, method, args });
-						if (target === "subprocess") return { exitCode: 0, stdout: "", stderr: "", duration: 0 };
+						if (target === "subprocess")
+							return { exitCode: 0, stdout: "", stderr: "", duration: 0 };
 						if (/^(list|search|batch)/.test(method)) return [];
 						return {};
 					};
@@ -241,7 +242,10 @@ export async function collectScripts(
 	registerAll: (server: never, manager: never, config: UnrealMcpConfig) => void,
 	config: UnrealMcpConfig,
 	mode: Mode = "plain",
-): Promise<{ scripts: RenderedScript[]; errors: { tool: string; variant: string; error: string }[] }> {
+): Promise<{
+	scripts: RenderedScript[];
+	errors: { tool: string; variant: string; error: string }[];
+}> {
 	const { server, tools } = createFakeServer();
 	const recording: Recording = { python: [], calls: [] };
 	const manager = createFakeManager(recording);
