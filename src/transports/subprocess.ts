@@ -54,10 +54,90 @@ function appendTail(chunks: string[], state: { size: number }, text: string): vo
 	}
 }
 
+/** A started program. Paths and arguments with spaces work on every platform. */
+export interface RunningProcess {
+	pid: number | undefined;
+	/** Resolves with the exit code when the program ends; rejects if it could not be started. */
+	done: Promise<number>;
+	/** Everything the program printed so far (the tail, for very long runs). */
+	output(): { stdout: string; stderr: string };
+	/** Stop the program and everything it started. */
+	kill(): void;
+}
+
+export interface StartOptions {
+	cwd?: string;
+	env?: NodeJS.ProcessEnv;
+	/** Called with each chunk of output as it arrives. */
+	onData?: (chunk: string, stream: "stdout" | "stderr") => void;
+}
+
 /**
- * Run a program and capture its output. Paths and arguments with spaces work on every platform
+ * Start a program without waiting for it. Paths and arguments with spaces work on every platform
  * (the default Windows install folder is "C:\\Program Files\\Epic Games\\...").
  */
+export function startProcess(
+	command: string,
+	args: string[],
+	options: StartOptions = {},
+): RunningProcess {
+	const stdoutChunks: string[] = [];
+	const stderrChunks: string[] = [];
+	const outSize = { size: 0 };
+	const errSize = { size: 0 };
+
+	let child: ChildProcess;
+	if (needsCmdShell(command)) {
+		const commandLine = [command, ...args].map(quoteCmdArg).join(" ");
+		child = spawn(commandLine, [], {
+			shell: true,
+			windowsVerbatimArguments: true,
+			cwd: options.cwd,
+			env: options.env,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+	} else {
+		child = spawn(command, args, {
+			shell: false,
+			cwd: options.cwd,
+			env: options.env,
+			detached: process.platform !== "win32",
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+	}
+
+	child.stdout?.on("data", (data: Buffer) => {
+		const text = data.toString();
+		appendTail(stdoutChunks, outSize, text);
+		options.onData?.(text, "stdout");
+	});
+	child.stderr?.on("data", (data: Buffer) => {
+		const text = data.toString();
+		appendTail(stderrChunks, errSize, text);
+		options.onData?.(text, "stderr");
+	});
+
+	const done = new Promise<number>((resolve, reject) => {
+		child.on("close", (exitCode) => resolve(exitCode ?? 1));
+		child.on("error", (err) =>
+			reject(
+				new UnrealMcpError(`Failed to spawn process: ${err.message}`, "SPAWN_FAILED", {
+					command,
+					args,
+				}),
+			),
+		);
+	});
+
+	return {
+		pid: child.pid,
+		done,
+		output: () => ({ stdout: stdoutChunks.join(""), stderr: stderrChunks.join("") }),
+		kill: () => killTree(child),
+	};
+}
+
+/** Run a program and capture its output. */
 export function runProcess(
 	command: string,
 	args: string[],
@@ -66,64 +146,36 @@ export function runProcess(
 ): Promise<SubprocessResult> {
 	return new Promise<SubprocessResult>((resolve, reject) => {
 		const startTime = Date.now();
-		const stdoutChunks: string[] = [];
-		const stderrChunks: string[] = [];
-		const outSize = { size: 0 };
-		const errSize = { size: 0 };
-
-		let child: ChildProcess;
+		let running: RunningProcess;
 		try {
-			if (needsCmdShell(command)) {
-				const commandLine = [command, ...args].map(quoteCmdArg).join(" ");
-				child = spawn(commandLine, [], {
-					shell: true,
-					windowsVerbatimArguments: true,
-					cwd: options.cwd,
-					stdio: ["ignore", "pipe", "pipe"],
-				});
-			} else {
-				child = spawn(command, args, {
-					shell: false,
-					cwd: options.cwd,
-					detached: process.platform !== "win32",
-					stdio: ["ignore", "pipe", "pipe"],
-				});
-			}
+			running = startProcess(command, args, options);
 		} catch (err) {
 			reject(err instanceof UnrealMcpError ? err : new UnrealMcpError(String(err), "SPAWN_FAILED"));
 			return;
 		}
 
 		const timer = setTimeout(() => {
-			killTree(child);
+			running.kill();
 			reject(new TimeoutError(`${command} ${args[0] || ""}`, timeout));
 		}, timeout);
 
-		child.stdout?.on("data", (data: Buffer) => appendTail(stdoutChunks, outSize, data.toString()));
-		child.stderr?.on("data", (data: Buffer) => appendTail(stderrChunks, errSize, data.toString()));
-
-		child.on("close", (exitCode) => {
-			clearTimeout(timer);
-			const stdout = stdoutChunks.join("");
-			const stderr = stderrChunks.join("");
-			resolve({
-				exitCode: exitCode ?? 1,
-				stdout,
-				stderr,
-				duration: Date.now() - startTime,
-				parsed: parseBuildOutput(`${stdout}\n${stderr}`),
-			});
-		});
-
-		child.on("error", (err) => {
-			clearTimeout(timer);
-			reject(
-				new UnrealMcpError(`Failed to spawn process: ${err.message}`, "SPAWN_FAILED", {
-					command,
-					args,
-				}),
-			);
-		});
+		running.done.then(
+			(exitCode) => {
+				clearTimeout(timer);
+				const { stdout, stderr } = running.output();
+				resolve({
+					exitCode,
+					stdout,
+					stderr,
+					duration: Date.now() - startTime,
+					parsed: parseBuildOutput(`${stdout}\n${stderr}`),
+				});
+			},
+			(err) => {
+				clearTimeout(timer);
+				reject(err);
+			},
+		);
 	});
 }
 

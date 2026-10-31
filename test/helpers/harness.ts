@@ -245,6 +245,8 @@ export async function collectScripts(
 ): Promise<{
 	scripts: RenderedScript[];
 	errors: { tool: string; variant: string; error: string }[];
+	/** Argument sets the tool's own parameter checks turned away, as the MCP SDK would */
+	rejected: { tool: string; variant: string }[];
 }> {
 	const { server, tools } = createFakeServer();
 	const recording: Recording = { python: [], calls: [] };
@@ -253,12 +255,18 @@ export async function collectScripts(
 
 	const scripts: RenderedScript[] = [];
 	const errors: { tool: string; variant: string; error: string }[] = [];
+	const rejected: { tool: string; variant: string }[] = [];
 	for (const tool of tools.values()) {
 		for (const v of argVariants(tool.shape, mode)) {
 			recording.python.length = 0;
+			// Apply zod defaults and checks the way the MCP SDK does before calling a handler.
+			const parsed = z.object(tool.shape).safeParse(v.args);
+			if (!parsed.success) {
+				rejected.push({ tool: tool.name, variant: v.label });
+				continue;
+			}
 			try {
-				// Apply zod defaults the way the MCP SDK does before calling a handler.
-				await tool.handler(z.object(tool.shape).parse(v.args));
+				await tool.handler(parsed.data);
 			} catch (e) {
 				errors.push({ tool: tool.name, variant: v.label, error: String(e) });
 			}
@@ -267,5 +275,5 @@ export async function collectScripts(
 			}
 		}
 	}
-	return { scripts, errors };
+	return { scripts, errors, rejected };
 }

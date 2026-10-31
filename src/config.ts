@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { UnrealMcpConfig } from "./types.js";
-import { ALL_MODULES } from "./types.js";
+import { ALL_MODULES, DEFAULT_MODULES } from "./types.js";
 import { parseEngineVersion, readBuildVersion } from "./utils/engine-version.js";
 import { resolveProject } from "./utils/project.js";
 
@@ -14,7 +14,8 @@ const DEFAULTS: UnrealMcpConfig = {
 	pluginBridgePort: 55557,
 	platform: "Win64",
 	configuration: "Development",
-	enabledModules: [...ALL_MODULES],
+	enabledModules: [...DEFAULT_MODULES],
+	protectLinkedContent: true,
 	timeouts: {
 		build: 600_000,
 		cook: 1_200_000,
@@ -22,6 +23,23 @@ const DEFAULTS: UnrealMcpConfig = {
 		pythonExec: 30_000,
 	},
 };
+
+function splitList(text: string): string[] {
+	return text
+		.split(",")
+		.map((item) => item.trim())
+		.filter(Boolean);
+}
+
+/** "all" stands for every module, including the optional ones. Unknown names are reported. */
+function expandModules(requested: string[]): string[] {
+	if (requested.includes("all")) return [...ALL_MODULES];
+	const known = new Set<string>(ALL_MODULES);
+	for (const name of requested) {
+		if (!known.has(name)) console.error(`unreal-mcp: unknown module "${name}" is ignored`);
+	}
+	return requested;
+}
 
 function loadConfigFile(): Partial<UnrealMcpConfig> {
 	const candidates = [
@@ -66,7 +84,21 @@ function loadEnvVars(): Partial<UnrealMcpConfig> {
 		config.configuration = process.env.UNREAL_MCP_CONFIGURATION;
 	}
 	if (process.env.UNREAL_MCP_MODULES) {
-		config.enabledModules = process.env.UNREAL_MCP_MODULES.split(",").map((m) => m.trim());
+		config.enabledModules = splitList(process.env.UNREAL_MCP_MODULES);
+	}
+	if (process.env.UNREAL_MCP_PROTECTED_PATHS) {
+		config.protectedPaths = splitList(process.env.UNREAL_MCP_PROTECTED_PATHS);
+	}
+	if (process.env.UNREAL_MCP_PROTECT_LINKED_CONTENT) {
+		config.protectLinkedContent = !/^(0|false|no|off)$/i.test(
+			process.env.UNREAL_MCP_PROTECT_LINKED_CONTENT,
+		);
+	}
+	if (process.env.UNREAL_MCP_RON_FRAMEWORK) {
+		config.ronFrameworkPath = process.env.UNREAL_MCP_RON_FRAMEWORK;
+	}
+	if (process.env.UNREAL_MCP_RON_PYTHON) {
+		config.ronPython = process.env.UNREAL_MCP_RON_PYTHON;
 	}
 
 	return config;
@@ -113,7 +145,22 @@ function parseCliArgs(argv: string[]): Partial<UnrealMcpConfig> {
 				i++;
 				break;
 			case "--modules":
-				config.enabledModules = next.split(",").map((m) => m.trim());
+				config.enabledModules = splitList(next);
+				i++;
+				break;
+			case "--protected-paths":
+				config.protectedPaths = splitList(next);
+				i++;
+				break;
+			case "--no-protect-linked-content":
+				config.protectLinkedContent = false;
+				break;
+			case "--ron-framework":
+				config.ronFrameworkPath = next;
+				i++;
+				break;
+			case "--ron-python":
+				config.ronPython = next;
 				i++;
 				break;
 		}
@@ -193,6 +240,8 @@ export function loadConfig(argv: string[] = process.argv.slice(2)): UnrealMcpCon
 			...(cliConfig.timeouts || {}),
 		},
 	};
+
+	merged.enabledModules = expandModules(merged.enabledModules);
 
 	// Resolve project path
 	if (merged.projectPath) {

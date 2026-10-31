@@ -9,6 +9,20 @@ export interface UnrealMcpConfig {
 	platform: string;
 	configuration: string;
 	enabledModules: string[];
+	/**
+	 * Content paths such as "/Game/ReadyOrNot" that tools refuse to modify. Engine content (/Engine)
+	 * is always protected.
+	 */
+	protectedPaths?: string[];
+	/**
+	 * Refuse to modify assets that are hard-linked to another file, such as a copy of a game's exported
+	 * content linked into the project. On by default.
+	 */
+	protectLinkedContent?: boolean;
+	/** Ready or Not: the Community Mapping Framework folder, which holds Tools/ronfw.py */
+	ronFrameworkPath?: string;
+	/** Python to run ronfw with (default: the engine's bundled Python, then the one on PATH) */
+	ronPython?: string;
 	timeouts: {
 		build: number;
 		cook: number;
@@ -86,6 +100,14 @@ export const ALL_MODULES = [
 	"remote-control-presets",
 	"plugin",
 	"diagnostics",
+	"ron",
 ] as const;
 
 export type ModuleName = (typeof ALL_MODULES)[number];
+
+/** Modules that stay off until they are listed in enabledModules (or "all" is). */
+export const OPTIONAL_MODULES: readonly ModuleName[] = ["ron"];
+
+export const DEFAULT_MODULES: ModuleName[] = ALL_MODULES.filter(
+	(module) => !OPTIONAL_MODULES.includes(module),
+);

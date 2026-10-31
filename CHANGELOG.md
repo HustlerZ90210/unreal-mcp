@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Ready or Not
+
+- Content protection: tools that save, create, rename or delete assets refuse to change engine content,
+  `protectedPaths`, anything in the exported game content, and anything hard-linked to another file.
+  See [docs/ron.md](docs/ron.md).
+- Optional `ron` module (off until enabled) that runs the framework's `ronfw` tool: `ron_status`,
+  `ron_check_map`, `ron_build_map`, `ron_light_map`, `ron_conflicts`, `ron_official_levels`,
+  `ron_testmode`, `ron_verify_content`, `ron_run`, `ron_job`.
+- Long-running commands run as jobs that can be waited for, followed and cancelled.
+- `--modules all` enables every module, including optional ones.
+
 ### Unreal Engine 5.3.2
 
 - Every tool's Python is checked against the Unreal 5.3 Python API (`npm run check:ue-api`). Calls to

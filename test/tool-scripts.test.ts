@@ -28,6 +28,8 @@ describe.skipIf(!PYTHON)("generated Python", () => {
 		]);
 		expect(a.errors).toEqual([]);
 		expect(b.errors).toEqual([]);
+		// every tool accepts ordinary arguments; hostile ones may be turned away by a tool's own checks
+		expect(a.rejected).toEqual([]);
 		plain = a.scripts.filter((s) => !RUNS_CALLERS_CODE.has(s.tool));
 		hostile = b.scripts.filter((s) => !RUNS_CALLERS_CODE.has(s.tool));
 		const run = (scripts: RenderedScript[]) =>
@@ -76,15 +78,30 @@ describe.skipIf(!PYTHON)("generated Python", () => {
 	});
 
 	it("keeps quotes, backslashes and code in arguments inside their string literals", () => {
-		expect(hostile.length).toBe(plain.length);
+		// Same tool and argument shape, hostile text: the structure of the script must not change.
+		const index = (scripts: RenderedScript[], checks: Map<string, PythonCheck>) => {
+			const seen = new Map<string, number>();
+			const byKey = new Map<string, PythonCheck | undefined>();
+			scripts.forEach((script, i) => {
+				const base = `${script.tool} [${script.variant}]`;
+				const n = seen.get(base) ?? 0;
+				seen.set(base, n + 1);
+				byKey.set(`${base} #${n}`, checks.get(id(script, i)));
+			});
+			return byKey;
+		};
+		const plainByKey = index(plain, plainChecks);
+		const hostileByKey = index(hostile, hostileChecks);
 		const different: string[] = [];
-		plain.forEach((s, i) => {
-			const a = plainChecks.get(id(s, i));
-			const b = hostileChecks.get(id(hostile[i], i));
-			if (JSON.stringify(a?.shape) !== JSON.stringify(b?.shape)) {
-				different.push(`${s.tool} [${s.variant}]`);
+		let compared = 0;
+		for (const [key, a] of plainByKey) {
+			if (!hostileByKey.has(key)) continue; // the tool turned the hostile arguments away
+			compared++;
+			if (JSON.stringify(a?.shape) !== JSON.stringify(hostileByKey.get(key)?.shape)) {
+				different.push(key);
 			}
-		});
+		}
+		expect(compared).toBeGreaterThan(plain.length * 0.9);
 		expect(different).toEqual([]);
 	});
 });

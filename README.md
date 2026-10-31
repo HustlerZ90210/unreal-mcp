@@ -1,6 +1,6 @@
 # unreal-mcp
 
-The most comprehensive MCP server for Unreal Engine — **129 tools** across **17 subsystems**, with **4 transport layers** and **no mandatory C++ plugin**.
+The most comprehensive MCP server for Unreal Engine — **129 tools** across **17 subsystems** (plus an optional Ready or Not module), with **4 transport layers** and **no mandatory C++ plugin**.
 
 > **Beta** — This project is under active development and testing. The tools' Python is checked against the Unreal Engine **5.3** Python API (see [docs/ue-compat.md](docs/ue-compat.md) for what that covers and what it does not) and has not been run end to end in a real 5.3.2 editor by the maintainers of this fork. Run `check_ue_compat` in your editor to see which tools your engine build can run. Bug reports and contributions are welcome.
 
@@ -90,6 +90,7 @@ Add to `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/App
 | **remote-control-presets** | 5 | List/get/set preset properties, call preset functions |
 | **plugin** | 3 | List, enable, disable plugins in .uproject |
 | **diagnostics** | 2 | Engine version and connections, `check_ue_compat` self-test for your engine build |
+| **ron** (optional) | 10 | Ready or Not: run the framework's `ronfw` tool to check, build and install maps, with long-running jobs. Off until enabled |
 
 ## Architecture
 
@@ -132,7 +133,11 @@ Three-layer priority: CLI args > environment variables > config file > defaults.
 | `UNREAL_MCP_PYTHON_PORT` | 6776 | Python Remote Execution port |
 | `UNREAL_MCP_PLATFORM` | Win64 | Target platform |
 | `UNREAL_MCP_CONFIGURATION` | Development | Build configuration |
-| `UNREAL_MCP_MODULES` | all | Comma-separated list of modules to enable |
+| `UNREAL_MCP_MODULES` | all except `ron` | Comma-separated list of modules to enable (`all` includes the optional `ron`) |
+| `UNREAL_MCP_PROTECTED_PATHS` | — | Content paths the tools refuse to change, e.g. `/Game/ReadyOrNot` |
+| `UNREAL_MCP_PROTECT_LINKED_CONTENT` | on | `0` allows changes to hard-linked content |
+| `UNREAL_MCP_RON_FRAMEWORK` | auto-detect | Ready or Not: the folder holding `Tools/ronfw.py` |
+| `UNREAL_MCP_RON_PYTHON` | engine's Python | Ready or Not: Python to run `ronfw` with |
 
 ### CLI Arguments
 
@@ -184,6 +189,13 @@ Place `.unrealmcp.json` in your project directory or home directory:
 ### Optional (for Blueprint graph tools)
 
 Install the C++ plugin from `plugin/UnrealMCPBridge/` into your project's `Plugins/` directory. This enables `add_graph_node`, `connect_graph_nodes`, and `remove_graph_node`.
+
+## Content Protection and Ready or Not
+
+The tools that save, create, rename or delete assets refuse to touch engine content and content that is
+hard-linked to another file, such as the game export a Ready or Not mapping project links in. This is
+on by default and costs nothing in a normal project. The optional `ron` module runs the Community
+Mapping Framework's `ronfw` tool. See [docs/ron.md](docs/ron.md).
 
 ## Unreal Engine Versions
 

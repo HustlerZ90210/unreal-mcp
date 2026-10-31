@@ -83,6 +83,11 @@ The `PluginBridgeClient` supports:
 
 Tools use `manager.executeWithPluginFallback()` for the dual-path pattern: tries plugin first, falls back to Python on failure or absence. Always pass all Python scripts through `inlineScript()` with `{{var}}` — never put a tool parameter into Python with raw `${var}`. Static helper constants (like `MATERIAL_HELPERS_PY`) may be interpolated.
 
+## Content protection and the ron module
+
+- `src/tools/guard.ts` wraps the server so tools that change assets are checked against `src/utils/protect.ts` first. A tool that saves, creates, renames, deletes or edits assets must be listed in `WRITE_PARAMS` (a test fails otherwise).
+- `src/tools/ron.ts` is the optional Ready or Not module (off until enabled). It runs `ronfw` through `src/utils/jobs.ts`, which keeps long commands running as jobs. See `docs/ron.md`.
+
 ## Targeting Unreal Engine 5.3.2
 
 The target engine is 5.3.2 (see `docs/ue-compat.md`). Before using an `unreal.*` API in a tool, confirm it exists in the 5.3 Python docs (`https://dev.epicgames.com/documentation/en-us/unreal-engine/python-api/class/<Class>?application_version=5.3`). Many functions return several values as a tuple (`handle, fail_reason = subsystem.add_new_subobject(params)`), and structs do not have the C++ helper methods (`handle.is_valid()` does not exist; use the function library). If a tool must use something newer, check for it with `getattr(unreal, ...)` in the script, call `manager.requireEngineAtLeast()`, and list it in `tools/ue-api/known-gated.json`. After changing a tool run `npm test`, `npm run check:ue-api` and `npm run api:manifest`. Nothing has been run in a real editor by the fork's maintainers, so say so when reporting results.
